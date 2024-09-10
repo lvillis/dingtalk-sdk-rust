@@ -1,0 +1,27 @@
+[package]
+name = "dingtalk-sdk"
+description = "Dingtalk SDK for Rust."
+version = "1.0.0"
+rust-version = "1.81.0"
+edition = "2021"
+license = "MIT"
+authors = ["lvillis<lvillis@outlook.com>"]
+categories = ["api-bindings", "network-programming"]
+keywords = ["dingtalk", "sdk", "api", "webhook"]
+homepage = "https://github.com/lvillis/dingtalk-sdk-rust"
+repository = "https://github.com/lvillis/dingtalk-sdk-rust"
+documentation = "https://github.com/lvillis/dingtalk-sdk-rust"
+readme = "../README.md"
+
+[dependencies]
+base64 = "0.22.1"
+reqwest = "0.12.7"
+urlencoding = "2.1.3"
+futures = "0.3.1"
+hmac = "0.12.1"
+sha2 = "0.10.8"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+
+[dev-dependencies]
+tokio-test = "0.4.4"
