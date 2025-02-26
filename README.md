@@ -8,7 +8,7 @@
   <a href="https://crates.io/crates/dingtalk-sdk">
     <img src="https://img.shields.io/crates/v/dingtalk-sdk.svg" alt="crates.io version">
   </a>
-  <a href="https://crates.io/crates/dingtalk-sdk-rust">
+  <a href="https://crates.io/crates/dingtalk-sdk">
     <img src="https://img.shields.io/github/repo-size/lvillis/dingtalk-sdk-rust?style=flat-square&color=328657" alt="crates.io version">
   </a>
   <a href="https://github.com/lvillis/dingtalk-sdk-rust/actions">

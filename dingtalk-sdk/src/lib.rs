@@ -1,533 +1,683 @@
-use hmac::{Hmac, Mac};
-use serde_json::Value;
-use sha2::Sha256;
-use std::{
-    env, fs,
-    io::{Error, ErrorKind},
-    path::PathBuf,
-    time::SystemTime,
-};
+use base64::engine::general_purpose::STANDARD;
 use base64::Engine;
+use hmac::{Hmac, Mac};
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
+use sha2::Sha256;
+use std::time::{SystemTime, UNIX_EPOCH};
+use thiserror::Error;
 
-mod msg;
-use msg::*;
+/// Custom error type for DingTalk operations.
+#[derive(Error, Debug)]
+pub enum DingTalkError {
+    #[error("HTTP error: {0}")]
+    HttpError(#[from] reqwest::Error),
 
-pub use msg::{
-    DingTalkMessage, DingTalkMessageActionCardBtn, DingTalkMessageActionCardBtnOrientation,
-    DingTalkMessageActionCardHideAvatar, DingTalkMessageFeedCardLink, DingTalkMessageType,
-    DingTalkType,
-};
+    #[error("Timestamp generation failed")]
+    TimestampError(#[from] std::time::SystemTimeError),
 
-pub type XResult<T> = Result<T, Box<dyn std::error::Error>>;
+    #[error("Serialization error: {0}")]
+    SerializationError(#[from] serde_json::Error),
 
-const CONTENT_TYPE: &str = "Content-Type";
-const APPLICATION_JSON_UTF8: &str = "application/json; charset=utf-8";
+    #[error("HMAC error")]
+    HmacError,
 
-const DEFAULT_DINGTALK_ROBOT_URL: &str = "https://oapi.dingtalk.com/robot/send";
-const DEFAULT_WECHAT_WORK_ROBOT_URL: &str = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send";
-
-/// `DingTalk` is a simple SDK for DingTalk webhook robot
-///
-/// Document https://ding-doc.dingtalk.com/doc#/serverapi2/qf2nxq
-///
-/// Sample code:
-/// ```ignore
-/// let dt = DingTalk::new("<token>", "");
-/// dt.send_text("Hello world!")?;
-/// ```
-///
-/// At all sample:
-/// ```ignore
-/// dt.send_message(&DingTalkMessage::new_text("Hello World!").at_all())?;
-/// ```
-#[derive(Default)]
-pub struct DingTalk {
-    pub dingtalk_type: DingTalkType,
-    pub default_webhook_url: String,
-    pub access_token: String,
-    pub sec_token: String,
-    pub direct_url: String,
+    #[error("API error: {0}")]
+    ApiError(String),
 }
 
-impl DingTalkMessage {
-    /// New text DingTalk message
-    pub fn new_text(text_content: &str) -> Self {
-        Self::new(DingTalkMessageType::Text).text(text_content)
-    }
+/// ----------------------- Webhook Bot Section -----------------------
 
-    /// New markdown DingTalk message
-    pub fn new_markdown(markdown_title: &str, markdown_content: &str) -> Self {
-        Self::new(DingTalkMessageType::Markdown).markdown(markdown_title, markdown_content)
-    }
-
-    /// New link DingTalk message
-    pub fn new_link(
-        link_title: &str,
-        link_text: &str,
-        link_pic_url: &str,
-        link_message_url: &str,
-    ) -> Self {
-        Self::new(DingTalkMessageType::Link).link(
-            link_title,
-            link_text,
-            link_pic_url,
-            link_message_url,
-        )
-    }
-
-    /// New action card DingTalk message
-    pub fn new_action_card(title: &str, text: &str) -> Self {
-        let mut s = Self::new(DingTalkMessageType::ActionCard);
-        s.action_card_title = title.into();
-        s.action_card_text = text.into();
-        s
-    }
-
-    /// New feed card DingTalk message
-    pub fn new_feed_card() -> Self {
-        Self::new(DingTalkMessageType::FeedCard)
-    }
-
-    /// New DingTalk message
-    pub fn new(message_type: DingTalkMessageType) -> Self {
-        DingTalkMessage {
-            message_type,
-            ..Default::default()
-        }
-    }
-
-    /// Set text
-    pub fn text(mut self, text_content: &str) -> Self {
-        self.text_content = text_content.into();
-        self
-    }
-
-    /// Set markdown
-    pub fn markdown(mut self, markdown_title: &str, markdown_content: &str) -> Self {
-        self.markdown_title = markdown_title.into();
-        self.markdown_content = markdown_content.into();
-        self
-    }
-
-    /// Set link
-    pub fn link(
-        mut self,
-        link_title: &str,
-        link_text: &str,
-        link_pic_url: &str,
-        link_message_url: &str,
-    ) -> Self {
-        self.link_title = link_title.into();
-        self.link_text = link_text.into();
-        self.link_pic_url = link_pic_url.into();
-        self.link_message_url = link_message_url.into();
-        self
-    }
-
-    /// Set action card show avator(default show)
-    pub fn action_card_show_avatar(mut self) -> Self {
-        self.action_card_hide_avatar = DingTalkMessageActionCardHideAvatar::Show;
-        self
-    }
-
-    /// Set action card hide avator
-    pub fn action_card_hide_avatar(mut self) -> Self {
-        self.action_card_hide_avatar = DingTalkMessageActionCardHideAvatar::Hide;
-        self
-    }
-
-    /// Set action card btn vertical(default vertical)
-    pub fn action_card_btn_vertical(mut self) -> Self {
-        self.action_card_btn_orientation = DingTalkMessageActionCardBtnOrientation::Vertical;
-        self
-    }
-
-    /// Set action card btn landscape
-    pub fn action_card_btn_landscape(mut self) -> Self {
-        self.action_card_btn_orientation = DingTalkMessageActionCardBtnOrientation::Landscape;
-        self
-    }
-
-    /// Set action card single btn
-    pub fn set_action_card_signle_btn(mut self, btn: DingTalkMessageActionCardBtn) -> Self {
-        self.action_card_single_btn = Some(btn);
-        self
-    }
-
-    /// Add action card btn
-    pub fn add_action_card_btn(mut self, btn: DingTalkMessageActionCardBtn) -> Self {
-        self.action_card_btns.push(btn);
-        self
-    }
-
-    /// Add feed card link
-    pub fn add_feed_card_link(mut self, link: DingTalkMessageFeedCardLink) -> Self {
-        self.feed_card_links.push(link);
-        self
-    }
-
-    /// Add feed card link detail
-    pub fn add_feed_card_link_detail(self, title: &str, message_url: &str, pic_url: &str) -> Self {
-        self.add_feed_card_link(DingTalkMessageFeedCardLink {
-            title: title.into(),
-            message_url: message_url.into(),
-            pic_url: pic_url.into(),
-        })
-    }
-
-    /// At all
-    pub fn at_all(mut self) -> Self {
-        self.at_all = true;
-        self
-    }
-
-    /// At mobiles
-    pub fn at_mobiles(mut self, mobiles: &[String]) -> Self {
-        for m in mobiles {
-            self.at_mobiles.push(m.clone());
-        }
-        self
-    }
+#[allow(dead_code)]
+#[derive(Serialize)]
+#[serde(tag = "msgtype")]
+enum Message {
+    #[serde(rename = "text")]
+    Text {
+        text: TextContent,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        at: Option<At>,
+    },
+    #[serde(rename = "link")]
+    Link {
+        link: LinkContent,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        at: Option<At>,
+    },
+    #[serde(rename = "markdown")]
+    Markdown {
+        markdown: MarkdownContent,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        at: Option<At>,
+    },
+    #[serde(rename = "actionCard")]
+    ActionCard {
+        #[serde(rename = "actionCard")]
+        action_card: ActionCardContent,
+    },
+    #[serde(rename = "feedCard")]
+    FeedCard {
+        #[serde(rename = "feedCard")]
+        feed_card: FeedCardContent,
+    },
 }
 
-impl DingTalk {
-    /// Create `DingTalk` from token:
-    /// wechatwork:access_token
-    /// dingtalk:access_token?sec_token
-    pub fn from_token(token: &str) -> XResult<Self> {
-        if token.starts_with("dingtalk:") {
-            let token_and_or_sec = &token["dingtalk:".len()..];
-            let mut token_and_or_sec_vec = token_and_or_sec.split('?');
-            let access_token = match token_and_or_sec_vec.next() {
-                Some(t) => t,
-                None => token_and_or_sec,
-            };
-            let sec_token = match token_and_or_sec_vec.next() {
-                Some(t) => t,
-                None => "",
-            };
-            Ok(Self::new(access_token, sec_token))
-        } else if token.starts_with("wechatwork:") {
-            Ok(Self::new_wechat(&token["wechatwork:".len()..]))
-        } else if token.starts_with("wecom:") {
-            Ok(Self::new_wechat(&token["wecom:".len()..]))
+#[derive(Serialize)]
+struct TextContent {
+    content: String,
+}
+
+#[derive(Serialize)]
+struct LinkContent {
+    title: String,
+    text: String,
+    #[serde(rename = "messageUrl")]
+    message_url: String,
+    #[serde(rename = "picUrl", skip_serializing_if = "Option::is_none")]
+    pic_url: Option<String>,
+}
+
+#[derive(Serialize)]
+struct MarkdownContent {
+    title: String,
+    text: String,
+}
+
+#[derive(Serialize)]
+struct ActionCardContent {
+    title: String,
+    text: String,
+    #[serde(rename = "btnOrientation", skip_serializing_if = "Option::is_none")]
+    btn_orientation: Option<String>,
+    #[serde(rename = "singleTitle", skip_serializing_if = "Option::is_none")]
+    single_title: Option<String>,
+    #[serde(rename = "singleURL", skip_serializing_if = "Option::is_none")]
+    single_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    btns: Option<Vec<ActionCardButton>>,
+}
+
+#[derive(Serialize)]
+pub struct ActionCardButton {
+    title: String,
+    #[serde(rename = "actionURL")]
+    action_url: String,
+}
+
+#[derive(Serialize)]
+struct FeedCardContent {
+    links: Vec<FeedCardLink>,
+}
+
+#[derive(Serialize)]
+pub struct FeedCardLink {
+    title: String,
+    #[serde(rename = "messageURL")]
+    message_url: String,
+    #[serde(rename = "picURL")]
+    pic_url: String,
+}
+
+#[derive(Serialize)]
+struct At {
+    #[serde(rename = "atMobiles", skip_serializing_if = "Option::is_none")]
+    at_mobiles: Option<Vec<String>>,
+    #[serde(rename = "atUserIds", skip_serializing_if = "Option::is_none")]
+    at_user_ids: Option<Vec<String>>,
+    #[serde(rename = "isAtAll", skip_serializing_if = "Option::is_none")]
+    is_at_all: Option<bool>,
+}
+
+/// Implementation of the DingTalk Webhook Bot.
+pub struct DingTalkRobot {
+    token: String,
+    secret: Option<String>,
+    client: Client,
+}
+
+impl DingTalkRobot {
+    /// Creates a new instance of `DingTalkRobot`.
+    ///
+    /// # Arguments
+    ///
+    /// * `token` - The access token for the DingTalk bot.
+    /// * `secret` - An optional secret for signature generation.
+    pub fn new(token: String, secret: Option<String>) -> Self {
+        DingTalkRobot {
+            token,
+            secret,
+            client: Client::new(),
+        }
+    }
+
+    /// Creates a URL-encoded signature based on the given timestamp.
+    ///
+    /// The signature is generated by signing the string composed of the timestamp and secret.
+    ///
+    /// # Arguments
+    ///
+    /// * `timestamp` - The current timestamp as a string.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the URL-encoded signature or a `DingTalkError` if an error occurs.
+    fn create_signature(&self, timestamp: &str) -> Result<String, DingTalkError> {
+        if let Some(ref secret) = self.secret {
+            let string_to_sign = format!("{}\n{}", timestamp, secret);
+            let key = secret.as_bytes();
+            let mut mac =
+                Hmac::<Sha256>::new_from_slice(key).map_err(|_| DingTalkError::HmacError)?;
+            mac.update(string_to_sign.as_bytes());
+            let result = mac.finalize().into_bytes();
+            // Use the recommended STANDARD engine for base64 encoding
+            let base64_result = STANDARD.encode(&result);
+            let url_encoded_result = urlencoding::encode(&base64_result).to_string();
+            Ok(url_encoded_result)
         } else {
-            Err(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("Tokne format erorr: {}", token),
-            )))
+            Ok(String::new())
         }
     }
 
-    /// Create `DingTalk` from file
+    /// Sends a message to the DingTalk Webhook.
     ///
-    /// Format see `DingTalk::from_json(json: &str)`
-    pub fn from_file(f: &str) -> XResult<Self> {
-        let f_path_buf = if f.starts_with("~/") {
-            let home = PathBuf::from(env::var("HOME")?);
-            home.join(f.chars().skip(2).collect::<String>())
+    /// This method constructs the request URL with the necessary signature (if a secret is provided)
+    /// and sends the HTTP POST request with the given message payload. Non-2xx responses are treated as errors.
+    ///
+    /// # Arguments
+    ///
+    /// * `message` - A reference to the message to be sent.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    async fn send_message(&self, message: &Message) -> Result<String, DingTalkError> {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_millis()
+            .to_string();
+        let sign = self.create_signature(&timestamp)?;
+
+        let url = if self.secret.is_some() {
+            format!(
+                "https://oapi.dingtalk.com/robot/send?access_token={}&timestamp={}&sign={}",
+                self.token, timestamp, sign
+            )
         } else {
-            PathBuf::from(f)
-        };
-        let f_content = fs::read_to_string(f_path_buf)?;
-        Self::from_json(&f_content)
-    }
-
-    /// Create `DingTalk` from JSON string
-    ///
-    /// Format:
-    /// ```json
-    /// {
-    ///     "default_webhook_url": "", // option
-    ///     "access_token": "<access token>",
-    ///     "sec_token": "<sec token>" // option
-    /// }
-    /// ```
-    pub fn from_json(json: &str) -> XResult<Self> {
-        let json_value: Value = serde_json::from_str(json)?;
-        if !json_value.is_object() {
-            return Err(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("JSON format erorr: {}", json),
-            )));
-        }
-        let type_str = json_value["type"]
-            .as_str()
-            .unwrap_or_default()
-            .to_lowercase();
-        let dingtalk_type = match type_str.as_str() {
-            "wechat" | "wechatwork" | "wecom" => DingTalkType::WeChatWork,
-            _ => DingTalkType::DingTalk,
+            format!(
+                "https://oapi.dingtalk.com/robot/send?access_token={}",
+                self.token
+            )
         };
 
-        let default_webhook_url = json_value["default_webhook_url"]
-            .as_str()
-            .unwrap_or_else(|| match dingtalk_type {
-                DingTalkType::DingTalk => DEFAULT_DINGTALK_ROBOT_URL,
-                DingTalkType::WeChatWork => DEFAULT_WECHAT_WORK_ROBOT_URL,
-            })
-            .to_owned();
-        let access_token = json_value["access_token"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
-        let sec_token = json_value["sec_token"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
-        let direct_url = json_value["direct_url"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
+        println!("URL: {}", url);
 
-        Ok(DingTalk {
-            dingtalk_type,
-            default_webhook_url,
-            access_token,
-            sec_token,
-            direct_url,
-        })
-    }
-
-    /// Create `DingTalk` from url, for outgoing robot
-    pub fn from_url(direct_url: &str) -> Self {
-        DingTalk {
-            direct_url: direct_url.into(),
-            ..Default::default()
-        }
-    }
-
-    /// Create `DingTalk`
-    /// `access_token` is access token, `sec_token` can be empty `""`
-    pub fn new(access_token: &str, sec_token: &str) -> Self {
-        DingTalk {
-            default_webhook_url: DEFAULT_DINGTALK_ROBOT_URL.into(),
-            access_token: access_token.into(),
-            sec_token: sec_token.into(),
-            ..Default::default()
-        }
-    }
-
-    /// Create `DingTalk` for WeChat Work
-    pub fn new_wechat(key: &str) -> Self {
-        DingTalk {
-            default_webhook_url: DEFAULT_WECHAT_WORK_ROBOT_URL.into(),
-            dingtalk_type: DingTalkType::WeChatWork,
-            access_token: key.into(),
-            ..Default::default()
-        }
-    }
-
-    /// Set default webhook url
-    pub fn set_default_webhook_url(&mut self, default_webhook_url: &str) {
-        self.default_webhook_url = default_webhook_url.into();
-    }
-
-    /// Send DingTalk message
-    ///
-    /// 1. Create DingTalk JSON message
-    /// 2. POST JSON message to DingTalk server
-    pub async fn send_message(&self, dingtalk_message: DingTalkMessage) -> XResult<()> {
-        let mut message_json = match dingtalk_message.message_type {
-            DingTalkMessageType::Text => serde_json::to_value(InnerTextMessage {
-                msgtype: DingTalkMessageType::Text,
-                text: InnerTextMessageText {
-                    content: dingtalk_message.text_content,
-                },
-            }),
-            DingTalkMessageType::Link => serde_json::to_value(InnerLinkMessage {
-                msgtype: DingTalkMessageType::Link,
-                link: InnerLinkMessageLink {
-                    title: dingtalk_message.link_title,
-                    text: dingtalk_message.link_text,
-                    pic_url: dingtalk_message.link_pic_url,
-                    message_url: dingtalk_message.link_message_url,
-                },
-            }),
-            DingTalkMessageType::Markdown => serde_json::to_value(InnerMarkdownMessage {
-                msgtype: DingTalkMessageType::Markdown,
-                markdown: InnerMarkdownMessageMarkdown {
-                    title: dingtalk_message.markdown_title,
-                    text: dingtalk_message.markdown_content,
-                },
-            }),
-            DingTalkMessageType::ActionCard => serde_json::to_value(InnerActionCardMessage {
-                msgtype: DingTalkMessageType::ActionCard,
-                action_card: InnerActionCardMessageActionCard {
-                    title: dingtalk_message.action_card_title,
-                    text: dingtalk_message.action_card_text,
-                    hide_avatar: dingtalk_message.action_card_hide_avatar,
-                    btn_orientation: dingtalk_message.action_card_btn_orientation,
-                },
-            }),
-            DingTalkMessageType::FeedCard => serde_json::to_value(InnerFeedCardMessage {
-                msgtype: DingTalkMessageType::FeedCard,
-                feed_card: InnerFeedCardMessageFeedCard {
-                    links: {
-                        let mut links: Vec<InnerFeedCardMessageFeedCardLink> = vec![];
-                        for feed_card_link in &dingtalk_message.feed_card_links {
-                            links.push(InnerFeedCardMessageFeedCardLink {
-                                title: feed_card_link.title.clone(),
-                                message_url: feed_card_link.message_url.clone(),
-                                pic_url: feed_card_link.pic_url.clone(),
-                            });
-                        }
-                        links
-                    },
-                },
-            }),
-        }?;
-        if DingTalkMessageType::ActionCard == dingtalk_message.message_type {
-            if dingtalk_message.action_card_single_btn.is_some() {
-                if let Some(single_btn) = dingtalk_message.action_card_single_btn.as_ref() {
-                    message_json["actionCard"]["singleTitle"] = single_btn.title.as_str().into();
-                    message_json["actionCard"]["singleURL"] = single_btn.action_url.as_str().into();
-                };
-            } else {
-                let mut btns: Vec<InnerActionCardMessageBtn> = vec![];
-                for action_card_btn in &dingtalk_message.action_card_btns {
-                    btns.push(InnerActionCardMessageBtn {
-                        title: action_card_btn.title.clone(),
-                        action_url: action_card_btn.action_url.clone(),
-                    });
-                }
-                message_json["actionCard"]["btns"] = serde_json::to_value(btns)?;
-            }
-        }
-        if dingtalk_message.at_all || !dingtalk_message.at_mobiles.is_empty() {
-            if let Some(m) = message_json.as_object_mut() {
-                let mut at_mobiles: Vec<Value> = vec![];
-                for m in &dingtalk_message.at_mobiles {
-                    at_mobiles.push(Value::String(m.clone()));
-                }
-                let mut at_map = serde_json::Map::new();
-                at_map.insert("atMobiles".into(), Value::Array(at_mobiles));
-                at_map.insert("isAtAll".into(), Value::Bool(dingtalk_message.at_all));
-
-                m.insert("at".into(), Value::Object(at_map));
-            }
-        }
-        self.send(&serde_json::to_string(&message_json)?).await
-    }
-
-    /// Send text message
-    pub async fn send_text(&self, text_message: &str) -> XResult<()> {
-        self.send_message(DingTalkMessage::new_text(text_message))
-            .await
-    }
-
-    /// Send markdown message
-    pub async fn send_markdown(&self, title: &str, text: &str) -> XResult<()> {
-        self.send_message(DingTalkMessage::new_markdown(title, text))
-            .await
-    }
-
-    /// Send link message
-    pub async fn send_link(
-        &self,
-        link_title: &str,
-        link_text: &str,
-        link_pic_url: &str,
-        link_message_url: &str,
-    ) -> XResult<()> {
-        self.send_message(DingTalkMessage::new_link(
-            link_title,
-            link_text,
-            link_pic_url,
-            link_message_url,
-        ))
-        .await
-    }
-
-    /// Direct send JSON message
-    pub async fn send(&self, json_message: &str) -> XResult<()> {
-        let client = reqwest::Client::new();
-        let response = match client
-            .post(&self.generate_signed_url()?)
-            .header(CONTENT_TYPE, APPLICATION_JSON_UTF8)
-            .body(json_message.as_bytes().to_vec())
+        let response = self
+            .client
+            .post(url)
+            .json(message)
             .send()
-            .await
-        {
-            Ok(r) => r,
-            Err(e) => {
-                return Err(Box::new(Error::new(
-                    ErrorKind::Other,
-                    format!("Unknown error: {}", e),
-                )) as Box<dyn std::error::Error>);
-            }
+            .await?
+            .error_for_status()?; // Convert non-2xx HTTP responses into errors
+
+        let response_text = response.text().await?;
+        Ok(response_text)
+    }
+
+    /// Sends a text message.
+    ///
+    /// # Arguments
+    ///
+    /// * `content` - The content of the text message.
+    /// * `at_mobiles` - Optional list of mobile numbers to mention.
+    /// * `at_user_ids` - Optional list of user IDs to mention.
+    /// * `is_at_all` - Optional flag indicating whether to mention all users.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_text_message(
+        &self,
+        content: &str,
+        at_mobiles: Option<Vec<String>>,
+        at_user_ids: Option<Vec<String>>,
+        is_at_all: Option<bool>,
+    ) -> Result<String, DingTalkError> {
+        let at = if at_mobiles.is_some() || at_user_ids.is_some() || is_at_all.is_some() {
+            Some(At {
+                at_mobiles,
+                at_user_ids,
+                is_at_all,
+            })
+        } else {
+            None
         };
 
-        match response.status().as_u16() {
-            200_u16 => Ok(()),
-            _ => Err(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("Unknown status: {}", response.status().as_u16()),
-            )) as Box<dyn std::error::Error>),
-        }
+        let message = Message::Text {
+            text: TextContent {
+                content: content.to_string(),
+            },
+            at,
+        };
+        self.send_message(&message).await
     }
 
-    /// Generate signed dingtalk webhook URL
-    pub fn generate_signed_url(&self) -> XResult<String> {
-        if !self.direct_url.is_empty() {
-            return Ok(self.direct_url.clone());
-        }
-        let mut signed_url = String::with_capacity(1024);
-        signed_url.push_str(&self.default_webhook_url);
+    /// Sends a link message.
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The title of the link message.
+    /// * `text` - The descriptive text of the message.
+    /// * `message_url` - The URL that the message should link to.
+    /// * `pic_url` - Optional URL for the picture.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_link_message(
+        &self,
+        title: &str,
+        text: &str,
+        message_url: &str,
+        pic_url: Option<&str>,
+    ) -> Result<String, DingTalkError> {
+        let message = Message::Link {
+            link: LinkContent {
+                title: title.to_string(),
+                text: text.to_string(),
+                message_url: message_url.to_string(),
+                pic_url: pic_url.map(|s| s.to_string()),
+            },
+            at: None,
+        };
+        self.send_message(&message).await
+    }
 
-        if self.default_webhook_url.ends_with('?') {
-            // Just Ok
-        } else if self.default_webhook_url.contains('?') {
-            if !self.default_webhook_url.ends_with('&') {
-                signed_url.push('&');
-            }
+    /// Sends a Markdown message.
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The title of the Markdown message.
+    /// * `text` - The Markdown formatted content.
+    /// * `at_mobiles` - Optional list of mobile numbers to mention.
+    /// * `at_user_ids` - Optional list of user IDs to mention.
+    /// * `is_at_all` - Optional flag indicating whether to mention all users.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_markdown_message(
+        &self,
+        title: &str,
+        text: &str,
+        at_mobiles: Option<Vec<String>>,
+        at_user_ids: Option<Vec<String>>,
+        is_at_all: Option<bool>,
+    ) -> Result<String, DingTalkError> {
+        let at = if at_mobiles.is_some() || at_user_ids.is_some() || is_at_all.is_some() {
+            Some(At {
+                at_mobiles,
+                at_user_ids,
+                is_at_all,
+            })
         } else {
-            signed_url.push('?');
-        }
+            None
+        };
 
-        match self.dingtalk_type {
-            DingTalkType::DingTalk => signed_url.push_str("access_token="),
-            DingTalkType::WeChatWork => signed_url.push_str("key="),
-        }
-        signed_url.push_str(&urlencoding::encode(&self.access_token));
-
-        if !self.sec_token.is_empty() {
-            let timestamp = &format!(
-                "{}",
-                SystemTime::now()
-                    .duration_since(SystemTime::UNIX_EPOCH)
-                    .unwrap()
-                    .as_millis()
-            );
-            let timestamp_and_secret = &format!("{}\n{}", timestamp, self.sec_token);
-
-            // Use the recommended new method for base64 encoding
-            let hmac_sha256 = base64::engine::general_purpose::STANDARD.encode(
-                &calc_hmac_sha256(self.sec_token.as_bytes(), timestamp_and_secret.as_bytes())?[..],
-            );
-
-            signed_url.push_str("&timestamp=");
-            signed_url.push_str(timestamp);
-            signed_url.push_str("&sign=");
-            signed_url.push_str(&urlencoding::encode(&hmac_sha256));
-        }
-
-        Ok(signed_url)
+        let message = Message::Markdown {
+            markdown: MarkdownContent {
+                title: title.to_string(),
+                text: text.to_string(),
+            },
+            at,
+        };
+        self.send_message(&message).await
     }
 
+    /// Sends an ActionCard message with a single redirection button.
+    ///
+    /// This version uses a single button that redirects to the provided URL.
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The title of the ActionCard message.
+    /// * `text` - The content of the message.
+    /// * `single_title` - The title of the single button.
+    /// * `single_url` - The URL to redirect when the button is clicked.
+    /// * `btn_orientation` - Optional button orientation.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_action_card_message_single(
+        &self,
+        title: &str,
+        text: &str,
+        single_title: &str,
+        single_url: &str,
+        btn_orientation: Option<&str>,
+    ) -> Result<String, DingTalkError> {
+        let message = Message::ActionCard {
+            action_card: ActionCardContent {
+                title: title.to_string(),
+                text: text.to_string(),
+                btn_orientation: btn_orientation.map(|s| s.to_string()),
+                single_title: Some(single_title.to_string()),
+                single_url: Some(single_url.to_string()),
+                btns: None,
+            },
+        };
+        self.send_message(&message).await
+    }
+
+    /// Sends an ActionCard message with multiple buttons, each having its own URL.
+    ///
+    /// # Arguments
+    ///
+    /// * `title` - The title of the ActionCard message.
+    /// * `text` - The content of the message.
+    /// * `btns` - A vector of `ActionCardButton` representing the buttons.
+    /// * `btn_orientation` - Optional button orientation.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_action_card_message_multi(
+        &self,
+        title: &str,
+        text: &str,
+        btns: Vec<ActionCardButton>,
+        btn_orientation: Option<&str>,
+    ) -> Result<String, DingTalkError> {
+        let message = Message::ActionCard {
+            action_card: ActionCardContent {
+                title: title.to_string(),
+                text: text.to_string(),
+                btn_orientation: btn_orientation.map(|s| s.to_string()),
+                single_title: None,
+                single_url: None,
+                btns: Some(btns),
+            },
+        };
+        self.send_message(&message).await
+    }
+
+    /// Sends a FeedCard message.
+    ///
+    /// # Arguments
+    ///
+    /// * `links` - A vector of `FeedCardLink` representing the individual links.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_feed_card_message(
+        &self,
+        links: Vec<FeedCardLink>,
+    ) -> Result<String, DingTalkError> {
+        let message = Message::FeedCard {
+            feed_card: FeedCardContent { links },
+        };
+        self.send_message(&message).await
+    }
 }
 
-/// calc hmac_sha256 digest
-fn calc_hmac_sha256(key: &[u8], message: &[u8]) -> XResult<Vec<u8>> {
-    let mut mac = match Hmac::<Sha256>::new_from_slice(key) {
-        Ok(m) => m,
-        Err(e) => {
-            return Err(Box::new(Error::new(
-                ErrorKind::Other,
-                format!("Hmac error: {}", e),
-            )));
+/// ----------------------- Enterprise Bot Section -----------------------
+
+/// Struct representing message parameters used to generate the `msgParam` field.
+#[derive(Serialize)]
+struct MsgParam {
+    title: String,
+    text: String,
+}
+
+/// Custom serializer that converts a struct into a JSON string.
+///
+/// This is used to ensure the field is serialized as a JSON string rather than a nested object.
+fn serialize_to_json_string<S, T>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+    T: ?Sized + Serialize,
+{
+    let s = serde_json::to_string(value).map_err(serde::ser::Error::custom)?;
+    serializer.serialize_str(&s)
+}
+
+/// Enterprise group message request struct.
+///
+/// Field names are in snake_case and renamed to match the API requirements.
+#[derive(Serialize)]
+struct GroupMessageRequest<'a> {
+    #[serde(rename = "msgParam", serialize_with = "serialize_to_json_string")]
+    msg_param: MsgParam,
+    #[serde(rename = "msgKey")]
+    msg_key: &'a str,
+    #[serde(rename = "robotCode")]
+    robot_code: &'a str,
+    #[serde(rename = "openConversationId")]
+    open_conversation_id: &'a str,
+}
+
+/// Enterprise private message request struct.
+#[derive(Serialize)]
+struct OtoMessageRequest<'a> {
+    #[serde(rename = "msgParam", serialize_with = "serialize_to_json_string")]
+    msg_param: MsgParam,
+    #[serde(rename = "msgKey")]
+    msg_key: &'a str,
+    #[serde(rename = "robotCode")]
+    robot_code: &'a str,
+    #[serde(rename = "userIds", skip_serializing_if = "Vec::is_empty")]
+    user_ids: Vec<&'a str>,
+}
+
+/// Implementation of the Enterprise Bot interface.
+pub struct EnterpriseDingTalkRobot {
+    appkey: String,
+    appsecret: String,
+    robot_code: String,
+    client: Client,
+}
+
+impl EnterpriseDingTalkRobot {
+    /// Creates a new instance of `EnterpriseDingTalkRobot`.
+    ///
+    /// # Arguments
+    ///
+    /// * `appkey` - The application key.
+    /// * `appsecret` - The application secret.
+    /// * `robot_code` - The robot code.
+    pub fn new(appkey: String, appsecret: String, robot_code: String) -> Self {
+        EnterpriseDingTalkRobot {
+            appkey,
+            appsecret,
+            robot_code,
+            client: Client::new(),
         }
-    };
-    mac.update(message);
-    Ok(mac.finalize().into_bytes().to_vec())
+    }
+
+    /// Retrieves the access token.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the access token string or a `DingTalkError`.
+    pub async fn get_access_token(&self) -> Result<String, DingTalkError> {
+        let url = format!(
+            "https://oapi.dingtalk.com/gettoken?appkey={}&appsecret={}",
+            self.appkey, self.appsecret
+        );
+        let res = self
+            .client
+            .get(&url)
+            .send()
+            .await?
+            .json::<GetTokenResponse>()
+            .await?;
+        if res.errcode != 0 {
+            return Err(DingTalkError::ApiError(res.errmsg));
+        }
+        res.access_token
+            .ok_or_else(|| DingTalkError::ApiError("No access token returned".to_string()))
+    }
+
+    /// Sends an enterprise group chat message.
+    ///
+    /// # Arguments
+    ///
+    /// * `open_conversation_id` - The conversation ID of the group chat.
+    /// * `title` - The title of the message.
+    /// * `text` - The content of the message.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_group_message(
+        &self,
+        open_conversation_id: &str,
+        title: &str,
+        text: &str,
+    ) -> Result<String, DingTalkError> {
+        let access_token = self.get_access_token().await?;
+        let url = "https://api.dingtalk.com/v1.0/robot/groupMessages/send";
+        let req_body = GroupMessageRequest {
+            msg_param: MsgParam {
+                title: title.to_string(),
+                text: text.to_string(),
+            },
+            msg_key: "sampleMarkdown",
+            robot_code: &self.robot_code,
+            open_conversation_id,
+        };
+        let response = self
+            .client
+            .post(url)
+            .header("x-acs-dingtalk-access-token", access_token)
+            .json(&req_body)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        Ok(response)
+    }
+
+    /// Sends an enterprise private chat message.
+    ///
+    /// # Arguments
+    ///
+    /// * `user_id` - The user ID of the recipient.
+    /// * `title` - The title of the message.
+    /// * `text` - The content of the message.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn send_oto_message(
+        &self,
+        user_id: &str,
+        title: &str,
+        text: &str,
+    ) -> Result<String, DingTalkError> {
+        let access_token = self.get_access_token().await?;
+        let url = "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend";
+        let req_body = OtoMessageRequest {
+            msg_param: MsgParam {
+                title: title.to_string(),
+                text: text.to_string(),
+            },
+            msg_key: "sampleMarkdown",
+            robot_code: &self.robot_code,
+            user_ids: vec![user_id],
+        };
+        let response = self
+            .client
+            .post(url)
+            .header("x-acs-dingtalk-access-token", access_token)
+            .json(&req_body)
+            .send()
+            .await?
+            .error_for_status()?
+            .text()
+            .await?;
+        Ok(response)
+    }
+
+    /// Replies to a message based on the provided data.
+    ///
+    /// Automatically determines whether to send a group chat or private chat message.
+    ///
+    /// # Arguments
+    ///
+    /// * `data` - The JSON value containing the original message data.
+    /// * `title` - The title of the reply message.
+    /// * `text` - The content of the reply message.
+    ///
+    /// # Returns
+    ///
+    /// A `Result` containing the response text or a `DingTalkError`.
+    pub async fn reply_message(
+        &self,
+        data: &serde_json::Value,
+        title: &str,
+        text: &str,
+    ) -> Result<String, DingTalkError> {
+        let access_token = self.get_access_token().await?;
+        let msg_param = MsgParam {
+            title: title.to_string(),
+            text: text.to_string(),
+        };
+        if data.get("conversationType").and_then(|v| v.as_str()) == Some("1") {
+            let sender_staff_id = data
+                .get("senderStaffId")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| DingTalkError::ApiError("Missing senderStaffId".to_string()))?;
+            let url = "https://api.dingtalk.com/v1.0/robot/oToMessages/batchSend";
+            let req_body = OtoMessageRequest {
+                msg_param,
+                msg_key: "sampleMarkdown",
+                robot_code: &self.robot_code,
+                user_ids: vec![sender_staff_id],
+            };
+            let response = self
+                .client
+                .post(url)
+                .header("x-acs-dingtalk-access-token", access_token)
+                .json(&req_body)
+                .send()
+                .await?
+                .error_for_status()?
+                .text()
+                .await?;
+            Ok(response)
+        } else {
+            let conversation_id = data
+                .get("conversationId")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| DingTalkError::ApiError("Missing conversationId".to_string()))?;
+            let url = "https://api.dingtalk.com/v1.0/robot/groupMessages/send";
+            let req_body = GroupMessageRequest {
+                msg_param,
+                msg_key: "sampleMarkdown",
+                robot_code: &self.robot_code,
+                open_conversation_id: conversation_id,
+            };
+            let response = self
+                .client
+                .post(url)
+                .header("x-acs-dingtalk-access-token", access_token)
+                .json(&req_body)
+                .send()
+                .await?
+                .error_for_status()?
+                .text()
+                .await?;
+            Ok(response)
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct GetTokenResponse {
+    errcode: i32,
+    errmsg: String,
+    access_token: Option<String>,
 }

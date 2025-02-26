@@ -9,3 +9,11 @@ members = [
 lto = "thin"
 codegen-units = 1
 strip = true
+
+[workspace.metadata.release]
+shared-version = true
+tag-prefix = ""
+tag-name = "{{prefix}}{{version}}"
+tag-message = "chore: release version {{version}}"
+pre-release-commit-message = "chore: release version {{version}}"
+pre-release-hook = ["git", "cliff", "--workdir", "../", "--output", "../CHANGELOG.md", "--tag", "{{version}}" ]
