@@ -146,7 +146,10 @@ impl DingTalkRobot {
         DingTalkRobot {
             token,
             secret,
-            client: Client::new(),
+            client: Client::builder()
+                .no_proxy()
+                .build()
+                .expect("build Client error"),
         }
     }
 
@@ -491,7 +494,10 @@ impl EnterpriseDingTalkRobot {
             appkey,
             appsecret,
             robot_code,
-            client: Client::new(),
+            client: Client::builder()
+                .no_proxy()
+                .build()
+                .expect("build Client error"),
         }
     }
 
