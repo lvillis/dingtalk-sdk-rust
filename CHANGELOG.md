@@ -8,6 +8,10 @@ All notable changes to this project will be documented in this file.
 
 - No proxy
 
+### ⚙️ Miscellaneous Tasks
+
+- Release version 1.0.2
+
 ## [1.0.1] - 2025-02-26
 
 ### 🚀 Features
