@@ -42,7 +42,7 @@ impl WebhookService {
             .send()
             .await?;
         let body = response.text_lossy();
-        validate_standard_api_response(&body)?;
+        validate_standard_api_response(&body, self.client.body_snippet())?;
         Ok(body)
     }
 

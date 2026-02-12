@@ -45,7 +45,11 @@
 
 // Require at least one client mode.
 #[cfg(not(any(feature = "_async", feature = "_blocking")))]
-compile_error!("Enable at least one client mode: `async` or `blocking`.");
+compile_error!(
+    "Enable at least one transport feature: \
+     `async-tls-rustls-ring`, `async-tls-rustls-aws-lc-rs`, `async-tls-native`, \
+     `blocking-tls-rustls-ring`, `blocking-tls-rustls-aws-lc-rs`, or `blocking-tls-native`."
+);
 
 // Async mode requires exactly one async TLS backend.
 #[cfg(all(
@@ -57,7 +61,7 @@ compile_error!("Enable at least one client mode: `async` or `blocking`.");
     ))
 ))]
 compile_error!(
-    "When `async` is enabled, enable one async TLS backend: \
+    "When `_async` is enabled, enable one async TLS backend: \
      `async-tls-rustls-ring`, `async-tls-rustls-aws-lc-rs`, or `async-tls-native`."
 );
 #[cfg(all(
@@ -77,7 +81,7 @@ compile_error!("`async-tls-rustls-aws-lc-rs` and `async-tls-native` are mutually
         feature = "async-tls-native"
     )
 ))]
-compile_error!("Async TLS features require enabling `async`.");
+compile_error!("Async TLS features require enabling `_async`.");
 
 // Blocking mode requires exactly one blocking TLS backend.
 #[cfg(all(
@@ -89,7 +93,7 @@ compile_error!("Async TLS features require enabling `async`.");
     ))
 ))]
 compile_error!(
-    "When `blocking` is enabled, enable one blocking TLS backend: \
+    "When `_blocking` is enabled, enable one blocking TLS backend: \
      `blocking-tls-rustls-ring`, `blocking-tls-rustls-aws-lc-rs`, or `blocking-tls-native`."
 );
 #[cfg(all(
@@ -114,7 +118,7 @@ compile_error!("`blocking-tls-rustls-aws-lc-rs` and `blocking-tls-native` are mu
         feature = "blocking-tls-native"
     )
 ))]
-compile_error!("Blocking TLS features require enabling `blocking`.");
+compile_error!("Blocking TLS features require enabling `_blocking`.");
 
 mod api;
 mod auth;

@@ -6,7 +6,7 @@ use url::Url;
 use crate::{
     api::{EnterpriseService, WebhookService},
     error::{Error, Result},
-    transport::{DEFAULT_ENTERPRISE_BASE_URL, DEFAULT_WEBHOOK_BASE_URL},
+    transport::{BodySnippetConfig, DEFAULT_ENTERPRISE_BASE_URL, DEFAULT_WEBHOOK_BASE_URL},
     util::url::{endpoint_url, normalize_base_url},
 };
 
@@ -30,6 +30,7 @@ pub struct ClientBuilder {
     default_headers: Vec<(String, String)>,
     cache_access_token: bool,
     token_refresh_margin: Duration,
+    body_snippet: BodySnippetConfig,
 }
 
 impl Default for ClientBuilder {
@@ -49,6 +50,7 @@ impl Default for ClientBuilder {
             default_headers: Vec::new(),
             cache_access_token: true,
             token_refresh_margin: DEFAULT_TOKEN_REFRESH_MARGIN,
+            body_snippet: BodySnippetConfig::default(),
         }
     }
 }
@@ -152,6 +154,13 @@ impl ClientBuilder {
         self
     }
 
+    /// Configures body snippet capture for API errors.
+    #[must_use]
+    pub fn body_snippet(mut self, value: BodySnippetConfig) -> Self {
+        self.body_snippet = value;
+        self
+    }
+
     /// Builds an async [`Client`].
     pub fn build(self) -> Result<Client> {
         let webhook_http = self.build_http_client(&self.webhook_base_url)?;
@@ -165,6 +174,7 @@ impl ClientBuilder {
                 enterprise_base_url: self.enterprise_base_url,
                 cache_access_token: self.cache_access_token,
                 token_refresh_margin: self.token_refresh_margin,
+                body_snippet: self.body_snippet,
             }),
         })
     }
@@ -212,6 +222,7 @@ struct Inner {
     enterprise_base_url: Url,
     cache_access_token: bool,
     token_refresh_margin: Duration,
+    body_snippet: BodySnippetConfig,
 }
 
 impl Client {
@@ -269,5 +280,9 @@ impl Client {
 
     pub(crate) fn token_refresh_margin(&self) -> Duration {
         self.inner.token_refresh_margin
+    }
+
+    pub(crate) fn body_snippet(&self) -> BodySnippetConfig {
+        self.inner.body_snippet
     }
 }

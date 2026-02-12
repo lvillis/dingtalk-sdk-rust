@@ -3,7 +3,8 @@
 use std::time::Duration;
 
 use dingtalk_sdk::{
-    ApprovalTerminateProcessInstanceRequest, Client, ContactGetUserRequest, ErrorKind,
+    ApprovalTerminateProcessInstanceRequest, BodySnippetConfig, Client, ContactGetUserRequest,
+    ErrorKind,
 };
 
 #[test]
@@ -17,6 +18,10 @@ fn async_client_builder_and_services_smoke_test() {
         .default_header("x-sdk-test", "async")
         .cache_access_token(false)
         .token_refresh_margin(Duration::from_secs(30))
+        .body_snippet(BodySnippetConfig {
+            enabled: false,
+            max_bytes: 128,
+        })
         .webhook_base_url("https://oapi.dingtalk.com")
         .expect("webhook base url should be accepted")
         .enterprise_base_url("https://api.dingtalk.com")

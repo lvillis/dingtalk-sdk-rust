@@ -36,7 +36,7 @@ blocking-tls-rustls-aws-lc-rs = ["_blocking", "reqx/blocking-tls-rustls-aws-lc-r
 blocking-tls-native = ["_blocking", "reqx/blocking-tls-native"]
 
 [dependencies]
-reqx = { version = "0.1.13", default-features = false }
+reqx = { version = "0.1.16", default-features = false }
 urlencoding = { version = "2.1.3", default-features = false }
 url = { version = "2.5.7", default-features = false }
 serde = { version = "1.0.218", features = ["derive"] }

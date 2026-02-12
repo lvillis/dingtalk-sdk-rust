@@ -116,12 +116,15 @@ fn normalize_token_ttl(expires_in_seconds: Option<i64>) -> Duration {
     }
 }
 
-pub(crate) fn validate_standard_api_response(body: &str) -> Result<()> {
+pub(crate) fn validate_standard_api_response(
+    body: &str,
+    body_snippet: BodySnippetConfig,
+) -> Result<()> {
     if let Ok(response) = serde_json::from_str::<StandardApiResponse>(body)
         && let Some(errcode) = response.errcode
         && errcode != 0
     {
-        let snippet = body_snippet_for_error(body, BodySnippetConfig::default());
+        let snippet = body_snippet_for_error(body, body_snippet);
         let message = response
             .errmsg
             .unwrap_or_else(|| "unknown dingtalk api error".to_string());
@@ -165,7 +168,8 @@ mod tests {
     #[test]
     fn api_error_response_is_detected() {
         let body = r#"{"errcode":310000,"errmsg":"invalid"}"#;
-        let error = validate_standard_api_response(body).expect_err("should fail");
+        let error = validate_standard_api_response(body, BodySnippetConfig::default())
+            .expect_err("should fail");
         match error {
             Error::Api { code, message, .. } => {
                 assert_eq!(code, 310000);
@@ -181,7 +185,24 @@ mod tests {
     #[test]
     fn api_success_response_passes() {
         let body = r#"{"errcode":0,"errmsg":"ok"}"#;
-        validate_standard_api_response(body).expect("ok");
+        validate_standard_api_response(body, BodySnippetConfig::default()).expect("ok");
+    }
+
+    #[test]
+    fn api_error_response_can_disable_body_snippet() {
+        let body = r#"{"errcode":310000,"errmsg":"invalid"}"#;
+        let config = BodySnippetConfig {
+            enabled: false,
+            max_bytes: 64,
+        };
+        let error = validate_standard_api_response(body, config).expect_err("should fail");
+        match error {
+            Error::Api { code, message, .. } => {
+                assert_eq!(code, 310000);
+                assert_eq!(message, "invalid");
+            }
+            other => panic!("unexpected error: {other:?}"),
+        }
     }
 
     #[test]

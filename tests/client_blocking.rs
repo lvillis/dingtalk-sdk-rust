@@ -2,7 +2,9 @@
 
 use std::time::Duration;
 
-use dingtalk_sdk::{BlockingClient, ContactListSubDepartmentsRequest, ErrorKind};
+use dingtalk_sdk::{
+    BlockingClient, BodySnippetConfig, ContactListSubDepartmentsRequest, ErrorKind,
+};
 
 #[test]
 fn blocking_client_builder_and_services_smoke_test() {
@@ -15,6 +17,10 @@ fn blocking_client_builder_and_services_smoke_test() {
         .default_header("x-sdk-test", "blocking")
         .cache_access_token(false)
         .token_refresh_margin(Duration::from_secs(30))
+        .body_snippet(BodySnippetConfig {
+            enabled: false,
+            max_bytes: 128,
+        })
         .webhook_base_url("https://oapi.dingtalk.com")
         .expect("webhook base url should be accepted")
         .enterprise_base_url("https://api.dingtalk.com")

@@ -1,6 +1,8 @@
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
+use super::is_private_conversation;
+
 use crate::{
     auth::AppCredentials,
     client::blocking_client::BlockingClient,
@@ -161,7 +163,7 @@ impl BlockingEnterpriseService {
             .send()?;
 
         let body = response.text_lossy();
-        crate::transport::validate_standard_api_response(&body)?;
+        crate::transport::validate_standard_api_response(&body, self.client.body_snippet())?;
         Ok(body)
     }
 
@@ -372,7 +374,7 @@ impl BlockingEnterpriseService {
             text: text.to_string(),
         };
 
-        if data.get("conversationType").and_then(|v| v.as_str()) == Some("1") {
+        if is_private_conversation(data) {
             let sender_staff_id = data
                 .get("senderStaffId")
                 .and_then(|v| v.as_str())
