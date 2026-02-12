@@ -12,8 +12,10 @@
 //! # Quick Start (Async)
 //!
 //! ```no_run
+//! #[cfg(feature = "_async")]
 //! use dingtalk_sdk::Client;
 //!
+//! #[cfg(feature = "_async")]
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let client = Client::builder().build()?;
@@ -23,25 +25,31 @@
 //!         .await?;
 //!     Ok(())
 //! }
+//!
+//! #[cfg(not(feature = "_async"))]
+//! fn main() {}
 //! ```
 //!
 //! # Feature Overview
 //!
 //! At least one runtime mode is required:
-//! - `async`
-//! - `blocking`
+//! - `_async` (internal)
+//! - `_blocking` (internal)
 //!
 //! Each enabled runtime mode requires exactly one TLS backend:
 //! - async: `async-tls-rustls-ring` / `async-tls-rustls-aws-lc-rs` / `async-tls-native`
 //! - blocking: `blocking-tls-rustls-ring` / `blocking-tls-rustls-aws-lc-rs` / `blocking-tls-native`
+//!
+//! In normal usage, select TLS features directly. They automatically enable the
+//! matching runtime mode.
 
 // Require at least one client mode.
-#[cfg(not(any(feature = "async", feature = "blocking")))]
+#[cfg(not(any(feature = "_async", feature = "_blocking")))]
 compile_error!("Enable at least one client mode: `async` or `blocking`.");
 
 // Async mode requires exactly one async TLS backend.
 #[cfg(all(
-    feature = "async",
+    feature = "_async",
     not(any(
         feature = "async-tls-rustls-ring",
         feature = "async-tls-rustls-aws-lc-rs",
@@ -62,7 +70,7 @@ compile_error!("`async-tls-rustls-ring` and `async-tls-native` are mutually excl
 #[cfg(all(feature = "async-tls-rustls-aws-lc-rs", feature = "async-tls-native"))]
 compile_error!("`async-tls-rustls-aws-lc-rs` and `async-tls-native` are mutually exclusive.");
 #[cfg(all(
-    not(feature = "async"),
+    not(feature = "_async"),
     any(
         feature = "async-tls-rustls-ring",
         feature = "async-tls-rustls-aws-lc-rs",
@@ -73,7 +81,7 @@ compile_error!("Async TLS features require enabling `async`.");
 
 // Blocking mode requires exactly one blocking TLS backend.
 #[cfg(all(
-    feature = "blocking",
+    feature = "_blocking",
     not(any(
         feature = "blocking-tls-rustls-ring",
         feature = "blocking-tls-rustls-aws-lc-rs",
@@ -99,7 +107,7 @@ compile_error!("`blocking-tls-rustls-ring` and `blocking-tls-native` are mutuall
 ))]
 compile_error!("`blocking-tls-rustls-aws-lc-rs` and `blocking-tls-native` are mutually exclusive.");
 #[cfg(all(
-    not(feature = "blocking"),
+    not(feature = "_blocking"),
     any(
         feature = "blocking-tls-rustls-ring",
         feature = "blocking-tls-rustls-aws-lc-rs",
@@ -117,21 +125,21 @@ mod transport;
 mod types;
 mod util;
 
-#[cfg(feature = "blocking")]
-#[cfg_attr(docsrs, doc(cfg(feature = "blocking")))]
+#[cfg(feature = "_blocking")]
+#[cfg_attr(docsrs, doc(cfg(feature = "_blocking")))]
 pub use api::{BlockingEnterpriseService, BlockingWebhookService};
-#[cfg(feature = "async")]
-#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+#[cfg(feature = "_async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "_async")))]
 pub use api::{EnterpriseService, WebhookService};
-#[cfg(feature = "async")]
-#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
+#[cfg(feature = "_async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "_async")))]
 pub use client::async_client::{Client, ClientBuilder};
-#[cfg(feature = "blocking")]
-#[cfg_attr(docsrs, doc(cfg(feature = "blocking")))]
+#[cfg(feature = "_blocking")]
+#[cfg_attr(docsrs, doc(cfg(feature = "_blocking")))]
 pub use client::blocking_client::{BlockingClient, BlockingClientBuilder};
 
-#[cfg(feature = "blocking")]
-#[cfg_attr(docsrs, doc(cfg(feature = "blocking")))]
+#[cfg(feature = "_blocking")]
+#[cfg_attr(docsrs, doc(cfg(feature = "_blocking")))]
 /// Blocking runtime service aliases.
 pub mod blocking {
     pub use crate::{

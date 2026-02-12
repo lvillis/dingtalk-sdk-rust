@@ -23,17 +23,17 @@ include = [
 ]
 
 [features]
-default = ["async", "async-tls-rustls-ring"]
-async = []
-blocking = []
+default = ["async-tls-rustls-ring"]
+_async = []
+_blocking = []
 
-async-tls-rustls-ring = ["reqx/async-tls-rustls-ring"]
-async-tls-rustls-aws-lc-rs = ["reqx/async-tls-rustls-aws-lc-rs"]
-async-tls-native = ["reqx/async-tls-native"]
+async-tls-rustls-ring = ["_async", "reqx/async-tls-rustls-ring"]
+async-tls-rustls-aws-lc-rs = ["_async", "reqx/async-tls-rustls-aws-lc-rs"]
+async-tls-native = ["_async", "reqx/async-tls-native"]
 
-blocking-tls-rustls-ring = ["reqx/blocking-tls-rustls-ring"]
-blocking-tls-rustls-aws-lc-rs = ["reqx/blocking-tls-rustls-aws-lc-rs"]
-blocking-tls-native = ["reqx/blocking-tls-native"]
+blocking-tls-rustls-ring = ["_blocking", "reqx/blocking-tls-rustls-ring"]
+blocking-tls-rustls-aws-lc-rs = ["_blocking", "reqx/blocking-tls-rustls-aws-lc-rs"]
+blocking-tls-native = ["_blocking", "reqx/blocking-tls-native"]
 
 [dependencies]
 reqx = { version = "0.1.13", default-features = false }
@@ -51,19 +51,19 @@ tokio = { version = "1.43.0", default-features = false, features = ["macros", "r
 
 [[example]]
 name = "async_webhook"
-required-features = ["async"]
+required-features = ["_async"]
 
 [[example]]
 name = "async_enterprise_contacts"
-required-features = ["async"]
+required-features = ["_async"]
 
 [[example]]
 name = "blocking_webhook"
-required-features = ["blocking"]
+required-features = ["_blocking"]
 
 [[example]]
 name = "blocking_enterprise_contacts"
-required-features = ["blocking"]
+required-features = ["_blocking"]
 
 [profile.release]
 lto = "thin"
@@ -85,5 +85,5 @@ pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}"
 
 [package.metadata.docs.rs]
 no-default-features = true
-features = ["async", "async-tls-rustls-ring"]
+features = ["async-tls-rustls-ring"]
 rustdoc-args = ["--cfg", "docsrs"]

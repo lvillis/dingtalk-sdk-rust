@@ -48,6 +48,7 @@ This project is a DingTalk API SDK written in Rust, with async/blocking clients,
   - Async: `WebhookService`, `EnterpriseService`
   - Blocking: `BlockingWebhookService`, `BlockingEnterpriseService`
 - **Selectable TLS backend per mode** (choose one for each enabled mode):
+  - Choosing a TLS feature automatically enables the corresponding runtime mode.
   - Async mode: `async-tls-rustls-ring` / `async-tls-rustls-aws-lc-rs` / `async-tls-native`
   - Blocking mode: `blocking-tls-rustls-ring` / `blocking-tls-rustls-aws-lc-rs` / `blocking-tls-native`
 - **Fixed signing backend**: `hmac` + `sha2` (HMAC-SHA256 for webhook signature)
@@ -84,21 +85,21 @@ Async only:
 
 ```toml
 [dependencies]
-dingtalk-sdk = { version = "1", default-features = false, features = ["async", "async-tls-rustls-ring"] }
+dingtalk-sdk = { version = "1", default-features = false, features = ["async-tls-rustls-ring"] }
 ```
 
 Blocking only:
 
 ```toml
 [dependencies]
-dingtalk-sdk = { version = "1", default-features = false, features = ["blocking", "blocking-tls-rustls-ring"] }
+dingtalk-sdk = { version = "1", default-features = false, features = ["blocking-tls-rustls-ring"] }
 ```
 
 Switch TLS backend:
 
 ```toml
 [dependencies]
-dingtalk-sdk = { version = "1", default-features = false, features = ["async", "async-tls-rustls-aws-lc-rs"] }
+dingtalk-sdk = { version = "1", default-features = false, features = ["async-tls-rustls-aws-lc-rs"] }
 ```
 
 ## Run Examples
@@ -124,8 +125,8 @@ cargo run --example async_enterprise_contacts
 Blocking examples:
 
 ```bash
-cargo run --no-default-features --features "blocking,blocking-tls-rustls-ring" --example blocking_webhook
-cargo run --no-default-features --features "blocking,blocking-tls-rustls-ring" --example blocking_enterprise_contacts
+cargo run --no-default-features --features "blocking-tls-rustls-ring" --example blocking_webhook
+cargo run --no-default-features --features "blocking-tls-rustls-ring" --example blocking_enterprise_contacts
 ```
 
 ## Quick Examples
@@ -218,7 +219,7 @@ cargo test
 Run tests with blocking feature set:
 
 ```bash
-cargo test --no-default-features --features "blocking,blocking-tls-rustls-ring"
+cargo test --no-default-features --features "blocking-tls-rustls-ring"
 ```
 
 ## License

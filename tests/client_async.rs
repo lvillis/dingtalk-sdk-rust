@@ -1,4 +1,4 @@
-#![cfg(feature = "async")]
+#![cfg(feature = "_async")]
 
 use std::time::Duration;
 

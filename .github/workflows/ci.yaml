@@ -31,11 +31,11 @@ jobs:
           - name: default
             args: ""
           - name: async-only
-            args: "--no-default-features --features async,async-tls-rustls-ring"
+            args: "--no-default-features --features async-tls-rustls-ring"
           - name: blocking-only
-            args: "--no-default-features --features blocking,blocking-tls-rustls-ring"
+            args: "--no-default-features --features blocking-tls-rustls-ring"
           - name: aws-lc
-            args: "--no-default-features --features async,blocking,async-tls-rustls-aws-lc-rs,blocking-tls-rustls-aws-lc-rs"
+            args: "--no-default-features --features async-tls-rustls-aws-lc-rs,blocking-tls-rustls-aws-lc-rs"
 
     steps:
     - uses: actions/checkout@v5

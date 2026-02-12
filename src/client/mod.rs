@@ -1,4 +1,4 @@
-#[cfg(feature = "async")]
+#[cfg(feature = "_async")]
 pub mod async_client;
-#[cfg(feature = "blocking")]
+#[cfg(feature = "_blocking")]
 pub mod blocking_client;
