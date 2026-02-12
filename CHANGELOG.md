@@ -1,8 +1,17 @@
+## [1.0.6] - 2026-02-12
+
+### 🐛 Bug Fixes
+
+- *(api)* Wire body snippet config and harden callback parsing
 ## [1.0.5] - 2026-02-12
 
 ### 🚜 Refactor
 
 - *(api)* [**breaking**] Simplify sdk feature model and improve rustdoc examples tests
+
+### ⚙️ Miscellaneous Tasks
+
+- Release dingtalk-sdk version 1.0.5
 ## [1.0.4] - 2026-02-12
 
 ### 🚀 Features

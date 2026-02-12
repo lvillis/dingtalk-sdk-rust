@@ -1,7 +1,7 @@
 [package]
 name = "dingtalk-sdk"
 description = "Dingtalk SDK for Rust."
-version = "1.0.5"
+version = "1.0.6"
 rust-version = "1.93.0"
 edition = "2024"
 license = "MIT"
