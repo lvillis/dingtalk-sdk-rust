@@ -10,13 +10,42 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  quality:
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v5
-    - name: Build
-      run: cargo build --verbose
+    - name: Rustfmt
+      run: cargo fmt --all --check
+    - name: Clippy
+      run: cargo clippy --all-targets -- -D warnings
+    - name: Docs
+      run: cargo doc --no-deps
+
+  check-feature-matrix:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default
+            args: ""
+          - name: async-only
+            args: "--no-default-features --features async,async-tls-rustls-ring"
+          - name: blocking-only
+            args: "--no-default-features --features blocking,blocking-tls-rustls-ring"
+          - name: aws-lc
+            args: "--no-default-features --features async,blocking,async-tls-rustls-aws-lc-rs,blocking-tls-rustls-aws-lc-rs"
+
+    steps:
+    - uses: actions/checkout@v5
+    - name: Check (${{ matrix.name }})
+      run: cargo check --verbose ${{ matrix.args }}
+
+  test-default:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
     - name: Run tests
       run: cargo test --verbose

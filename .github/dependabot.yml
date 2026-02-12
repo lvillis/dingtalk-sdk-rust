@@ -5,14 +5,10 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-      time: "07:00"
-      timezone: "Asia/Shanghai"
+      time: "23:00"
+
   - package-ecosystem: "cargo"
-    directories:
-      - "/dingtalk-sdk"
-      - "/dingtalk-cli"
+    directory: "/"
     schedule:
       interval: "daily"
-      time: "07:00"
-      timezone: "Asia/Shanghai"
-    open-pull-requests-limit: 20
+      time: "23:00"
