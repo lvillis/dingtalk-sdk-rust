@@ -1,8 +1,17 @@
+## [1.0.5] - 2026-02-12
+
+### 🚜 Refactor
+
+- *(api)* [**breaking**] Simplify sdk feature model and improve rustdoc examples tests
 ## [1.0.4] - 2026-02-12
 
 ### 🚀 Features
 
 - *(api)* Add contacts and approval enterprise APIs
+
+### ⚙️ Miscellaneous Tasks
+
+- Release dingtalk-sdk version 1.0.4
 ## [1.0.3] - 2025-03-02
 
 ### ⚙️ Miscellaneous Tasks
