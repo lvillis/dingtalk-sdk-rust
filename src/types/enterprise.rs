@@ -582,9 +582,131 @@ pub struct ApprovalListProcessInstanceIdsResult {
     pub next_cursor: Option<i64>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Typed user object from contact APIs.
+pub struct ContactUser {
+    /// DingTalk user id.
+    #[serde(default)]
+    pub userid: Option<String>,
+    /// DingTalk union id.
+    #[serde(default)]
+    pub unionid: Option<String>,
+    /// Display name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Mobile number.
+    #[serde(default)]
+    pub mobile: Option<String>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Response payload for contact user listing.
+pub struct ContactListUsersResult {
+    /// Whether there are more records.
+    #[serde(default)]
+    pub has_more: Option<bool>,
+    /// Cursor for the next page.
+    #[serde(default)]
+    pub next_cursor: Option<i64>,
+    /// User records in this page.
+    #[serde(default)]
+    pub list: Vec<ContactUser>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Response payload for contact user creation.
+pub struct ContactCreateUserResult {
+    /// Created user id.
+    #[serde(default)]
+    pub userid: Option<String>,
+    /// Related union id when provided by DingTalk.
+    #[serde(default)]
+    pub unionid: Option<String>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Typed department object from contact APIs.
+pub struct ContactDepartment {
+    /// Department id.
+    #[serde(default, alias = "id")]
+    pub dept_id: Option<i64>,
+    /// Department name.
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Parent department id.
+    #[serde(default)]
+    pub parent_id: Option<i64>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Response payload for listing child departments.
+pub struct ContactListSubDepartmentsResult {
+    /// Child department records.
+    #[serde(default, alias = "dept_list", alias = "department", alias = "list")]
+    pub departments: Vec<ContactDepartment>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Response payload for listing child department ids.
+pub struct ContactListSubDepartmentIdsResult {
+    /// Child department id list.
+    #[serde(default, alias = "list", alias = "department_ids")]
+    pub dept_id_list: Vec<i64>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Response payload for creating a department.
+pub struct ContactCreateDepartmentResult {
+    /// Created department id.
+    #[serde(default, alias = "id")]
+    pub dept_id: Option<i64>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[non_exhaustive]
+/// Typed approval process instance payload.
+pub struct ApprovalProcessInstance {
+    /// Approval process instance id.
+    #[serde(default)]
+    pub process_instance_id: Option<String>,
+    /// Additional response fields not modeled explicitly.
+    #[serde(flatten, default)]
+    pub extra: BTreeMap<String, Value>,
+}
+
 #[cfg(test)]
 mod tests {
-    use super::ApprovalTerminateProcessInstanceRequest;
+    use super::{
+        ApprovalProcessInstance, ApprovalTerminateProcessInstanceRequest, ContactListUsersResult,
+    };
 
     #[test]
     fn approval_terminate_request_serializes_optional_remark() {
@@ -596,6 +718,46 @@ mod tests {
         assert_eq!(
             value.get("remark").and_then(serde_json::Value::as_str),
             Some("cancelled by sdk test")
+        );
+    }
+
+    #[test]
+    fn contact_list_users_result_parses_known_and_extra_fields() {
+        let raw = r#"{
+            "has_more": true,
+            "next_cursor": 30,
+            "list": [{"userid":"u-1","name":"Alice"}],
+            "unknown_flag": 1
+        }"#;
+        let parsed: ContactListUsersResult =
+            serde_json::from_str(raw).expect("response should deserialize");
+
+        assert_eq!(parsed.has_more, Some(true));
+        assert_eq!(parsed.next_cursor, Some(30));
+        assert_eq!(parsed.list.len(), 1);
+        assert_eq!(parsed.list[0].userid.as_deref(), Some("u-1"));
+        assert_eq!(
+            parsed
+                .extra
+                .get("unknown_flag")
+                .and_then(serde_json::Value::as_i64),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn approval_process_instance_parses_known_and_extra_fields() {
+        let raw = r#"{"process_instance_id":"PROC-1","biz_id":"BIZ-1"}"#;
+        let parsed: ApprovalProcessInstance =
+            serde_json::from_str(raw).expect("response should deserialize");
+
+        assert_eq!(parsed.process_instance_id.as_deref(), Some("PROC-1"));
+        assert_eq!(
+            parsed
+                .extra
+                .get("biz_id")
+                .and_then(serde_json::Value::as_str),
+            Some("BIZ-1")
         );
     }
 }

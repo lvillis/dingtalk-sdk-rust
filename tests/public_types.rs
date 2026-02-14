@@ -48,6 +48,7 @@ fn api_error_helpers_report_kind_retryability_and_request_id() {
         code: 130101,
         message: "transient error".to_string(),
         request_id: Some("req-1".to_string()),
+        body_snippet: None,
     };
 
     assert_eq!(retryable_error.kind(), ErrorKind::Api);
@@ -58,6 +59,7 @@ fn api_error_helpers_report_kind_retryability_and_request_id() {
         code: 400001,
         message: "bad request".to_string(),
         request_id: None,
+        body_snippet: None,
     };
     assert!(!non_retryable_error.is_retryable());
 }

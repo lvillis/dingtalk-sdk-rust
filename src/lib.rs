@@ -6,7 +6,7 @@
 //! This crate provides:
 //! - async client (`Client`) and services (`WebhookService`, `EnterpriseService`)
 //! - optional blocking client (`BlockingClient`) and services
-//! - typed request models for contacts and approvals
+//! - typed request/response models for contacts and approvals
 //! - unified error model and retry integration via `reqx`
 //!
 //! # Quick Start (Async)
@@ -124,6 +124,7 @@ mod api;
 mod auth;
 mod client;
 mod error;
+mod retry;
 mod signature;
 mod transport;
 mod types;
@@ -154,19 +155,21 @@ pub mod blocking {
 /// Application credentials used by enterprise APIs.
 pub use auth::AppCredentials;
 /// SDK error type and helpers.
-pub use error::{Error, ErrorKind, Result};
-/// Re-export of retry policy type from `reqx`.
-pub use reqx::RetryPolicy;
+pub use error::{Error, ErrorKind, HttpError, Result, TransportError};
+/// SDK retry policy configuration.
+pub use retry::RetryConfig;
 /// Controls whether and how response snippets are retained in errors.
 pub use transport::BodySnippetConfig;
 /// Public webhook and enterprise request/response helper types.
 pub use types::{
     ActionCardButton, ApprovalCreateProcessInstanceRequest, ApprovalFormComponentValue,
     ApprovalListProcessInstanceIdsRequest, ApprovalListProcessInstanceIdsResult,
-    ApprovalTerminateProcessInstanceRequest, ContactCreateDepartmentRequest,
-    ContactCreateUserRequest, ContactDeleteDepartmentRequest, ContactDeleteUserRequest,
-    ContactGetDepartmentRequest, ContactGetUserByMobileRequest, ContactGetUserByUnionIdRequest,
-    ContactGetUserRequest, ContactListSubDepartmentIdsRequest, ContactListSubDepartmentsRequest,
-    ContactListUsersRequest, ContactUpdateDepartmentRequest, ContactUpdateUserRequest,
-    FeedCardLink,
+    ApprovalProcessInstance, ApprovalTerminateProcessInstanceRequest,
+    ContactCreateDepartmentRequest, ContactCreateDepartmentResult, ContactCreateUserRequest,
+    ContactCreateUserResult, ContactDeleteDepartmentRequest, ContactDeleteUserRequest,
+    ContactDepartment, ContactGetDepartmentRequest, ContactGetUserByMobileRequest,
+    ContactGetUserByUnionIdRequest, ContactGetUserRequest, ContactListSubDepartmentIdsRequest,
+    ContactListSubDepartmentIdsResult, ContactListSubDepartmentsRequest,
+    ContactListSubDepartmentsResult, ContactListUsersRequest, ContactListUsersResult,
+    ContactUpdateDepartmentRequest, ContactUpdateUserRequest, ContactUser, FeedCardLink,
 };

@@ -36,7 +36,7 @@ blocking-tls-rustls-aws-lc-rs = ["_blocking", "reqx/blocking-tls-rustls-aws-lc-r
 blocking-tls-native = ["_blocking", "reqx/blocking-tls-native"]
 
 [dependencies]
-reqx = { version = "0.1.16", default-features = false }
+reqx = { version = "0.1.20", default-features = false }
 urlencoding = { version = "2.1.3", default-features = false }
 url = { version = "2.5.7", default-features = false }
 serde = { version = "1.0.218", features = ["derive"] }
@@ -48,6 +48,7 @@ sha2 = { version = "0.10.8" }
 
 [dev-dependencies]
 tokio = { version = "1.43.0", default-features = false, features = ["macros", "rt-multi-thread"] }
+httpmock = { version = "0.8.3" }
 
 [[example]]
 name = "async_webhook"

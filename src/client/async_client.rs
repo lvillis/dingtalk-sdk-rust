@@ -1,11 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
-use reqx::{PermissiveRetryEligibility, RetryPolicy, prelude::Client as HttpClient};
+use reqx::{
+    PermissiveRetryEligibility, RetryPolicy as ReqxRetryPolicy, prelude::Client as HttpClient,
+};
 use url::Url;
 
 use crate::{
     api::{EnterpriseService, WebhookService},
     error::{Error, Result},
+    retry::RetryConfig,
     transport::{BodySnippetConfig, DEFAULT_ENTERPRISE_BASE_URL, DEFAULT_WEBHOOK_BASE_URL},
     util::url::{endpoint_url, normalize_base_url},
 };
@@ -25,7 +28,7 @@ pub struct ClientBuilder {
     no_system_proxy: bool,
     webhook_base_url: Url,
     enterprise_base_url: Url,
-    retry_policy: Option<RetryPolicy>,
+    retry_config: Option<RetryConfig>,
     retry_non_idempotent: bool,
     default_headers: Vec<(String, String)>,
     cache_access_token: bool,
@@ -45,7 +48,7 @@ impl Default for ClientBuilder {
                 .expect("default webhook base url must be valid"),
             enterprise_base_url: normalize_base_url(DEFAULT_ENTERPRISE_BASE_URL)
                 .expect("default enterprise base url must be valid"),
-            retry_policy: None,
+            retry_config: None,
             retry_non_idempotent: false,
             default_headers: Vec::new(),
             cache_access_token: true,
@@ -109,20 +112,17 @@ impl ClientBuilder {
         Ok(self)
     }
 
-    /// Sets a custom retry policy.
+    /// Sets retry configuration.
     #[must_use]
-    pub fn retry_policy(mut self, value: RetryPolicy) -> Self {
-        self.retry_policy = Some(value);
+    pub fn retry(mut self, value: RetryConfig) -> Self {
+        self.retry_config = Some(value);
         self
     }
 
     /// Convenience helper to configure standard retries.
     #[must_use]
     pub fn with_retry(mut self, max_retries: usize, base_backoff: Duration) -> Self {
-        let retry_policy = RetryPolicy::standard()
-            .max_attempts(max_retries.saturating_add(1))
-            .base_backoff(base_backoff);
-        self.retry_policy = Some(retry_policy);
+        self.retry_config = Some(RetryConfig::new(max_retries, base_backoff));
         self
     }
 
@@ -193,7 +193,10 @@ impl ClientBuilder {
             builder = builder.no_proxy(["*"]);
         }
 
-        if let Some(retry_policy) = self.retry_policy.clone() {
+        if let Some(retry_config) = self.retry_config {
+            let retry_policy = ReqxRetryPolicy::standard()
+                .max_attempts(retry_config.max_retries.saturating_add(1))
+                .base_backoff(retry_config.base_backoff);
             builder = builder.retry_policy(retry_policy);
         }
 

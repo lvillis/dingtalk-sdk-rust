@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
+use crate::types::enterprise::ApprovalProcessInstance;
 use crate::types::webhook::{ActionCardButton, FeedCardLink};
 
 #[derive(Serialize)]
@@ -182,7 +182,7 @@ pub(crate) struct ApprovalCreateProcessInstanceResponse {
 pub(crate) struct ApprovalGetProcessInstanceResponse {
     pub(crate) errcode: i64,
     pub(crate) errmsg: String,
-    pub(crate) process_instance: Option<Value>,
+    pub(crate) process_instance: Option<ApprovalProcessInstance>,
     pub(crate) request_id: Option<String>,
 }
 
@@ -208,10 +208,7 @@ mod tests {
         assert_eq!(
             parsed
                 .process_instance
-                .and_then(|v| v
-                    .get("process_instance_id")
-                    .and_then(|id| id.as_str())
-                    .map(str::to_owned))
+                .and_then(|instance| instance.process_instance_id)
                 .as_deref(),
             Some("PROC-123")
         );

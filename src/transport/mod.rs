@@ -42,11 +42,13 @@ pub(crate) fn api_error(
     code: i64,
     message: impl Into<String>,
     request_id: Option<String>,
+    body_snippet: Option<String>,
 ) -> Error {
     Error::Api {
         code,
         message: message.into(),
         request_id,
+        body_snippet,
     }
 }
 
@@ -124,16 +126,11 @@ pub(crate) fn validate_standard_api_response(
         && let Some(errcode) = response.errcode
         && errcode != 0
     {
-        let snippet = body_snippet_for_error(body, body_snippet);
         let message = response
             .errmsg
             .unwrap_or_else(|| "unknown dingtalk api error".to_string());
-        let message = if let Some(snippet) = snippet {
-            format!("{message} [body_snippet: {snippet}]")
-        } else {
-            message
-        };
-        return Err(api_error(errcode, message, None));
+        let snippet = body_snippet_for_error(body, body_snippet);
+        return Err(api_error(errcode, message, None, snippet));
     }
     Ok(())
 }
@@ -171,11 +168,17 @@ mod tests {
         let error = validate_standard_api_response(body, BodySnippetConfig::default())
             .expect_err("should fail");
         match error {
-            Error::Api { code, message, .. } => {
+            Error::Api {
+                code,
+                message,
+                body_snippet,
+                ..
+            } => {
                 assert_eq!(code, 310000);
+                assert_eq!(message, "invalid");
                 assert_eq!(
-                    message,
-                    "invalid [body_snippet: {\"errcode\":310000,\"errmsg\":\"invalid\"}]"
+                    body_snippet.as_deref(),
+                    Some("{\"errcode\":310000,\"errmsg\":\"invalid\"}")
                 );
             }
             other => panic!("unexpected error: {other:?}"),
@@ -197,9 +200,15 @@ mod tests {
         };
         let error = validate_standard_api_response(body, config).expect_err("should fail");
         match error {
-            Error::Api { code, message, .. } => {
+            Error::Api {
+                code,
+                message,
+                body_snippet,
+                ..
+            } => {
                 assert_eq!(code, 310000);
                 assert_eq!(message, "invalid");
+                assert_eq!(body_snippet, None);
             }
             other => panic!("unexpected error: {other:?}"),
         }

@@ -153,12 +153,12 @@ Custom endpoint and retry policy:
 
 ```rust
 use std::time::Duration;
-use dingtalk_sdk::{Client, RetryPolicy};
+use dingtalk_sdk::{Client, RetryConfig};
 
 let client = Client::builder()
     .webhook_base_url("https://oapi.dingtalk.com")?
     .enterprise_base_url("https://api.dingtalk.com")?
-    .retry_policy(RetryPolicy::standard().max_attempts(4))
+    .retry(RetryConfig::standard().max_retries(3))
     .retry_non_idempotent(false)
     .token_refresh_margin(Duration::from_secs(180))
     .build()?;
@@ -183,13 +183,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user = robot
         .contact_get_user(dingtalk_sdk::ContactGetUserRequest::new("manager123"))
         .await?;
-    println!("User: {}", user);
+    println!("User: {}", serde_json::to_string_pretty(&user)?);
 
     // Approvals: query instance detail
     let process = robot
         .approval_get_process_instance("PROC-INSTANCE-ID")
         .await?;
-    println!("Process: {}", process);
+    println!("Process: {}", serde_json::to_string_pretty(&process)?);
     Ok(())
 }
 ```

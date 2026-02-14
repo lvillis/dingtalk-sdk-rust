@@ -8,11 +8,14 @@ pub mod webhook;
 pub use enterprise::{
     ApprovalCreateProcessInstanceRequest, ApprovalFormComponentValue,
     ApprovalListProcessInstanceIdsRequest, ApprovalListProcessInstanceIdsResult,
-    ApprovalTerminateProcessInstanceRequest, ContactCreateDepartmentRequest,
-    ContactCreateUserRequest, ContactDeleteDepartmentRequest, ContactDeleteUserRequest,
-    ContactGetDepartmentRequest, ContactGetUserByMobileRequest, ContactGetUserByUnionIdRequest,
-    ContactGetUserRequest, ContactListSubDepartmentIdsRequest, ContactListSubDepartmentsRequest,
-    ContactListUsersRequest, ContactUpdateDepartmentRequest, ContactUpdateUserRequest,
+    ApprovalProcessInstance, ApprovalTerminateProcessInstanceRequest,
+    ContactCreateDepartmentRequest, ContactCreateDepartmentResult, ContactCreateUserRequest,
+    ContactCreateUserResult, ContactDeleteDepartmentRequest, ContactDeleteUserRequest,
+    ContactDepartment, ContactGetDepartmentRequest, ContactGetUserByMobileRequest,
+    ContactGetUserByUnionIdRequest, ContactGetUserRequest, ContactListSubDepartmentIdsRequest,
+    ContactListSubDepartmentIdsResult, ContactListSubDepartmentsRequest,
+    ContactListSubDepartmentsResult, ContactListUsersRequest, ContactListUsersResult,
+    ContactUpdateDepartmentRequest, ContactUpdateUserRequest, ContactUser,
 };
 /// Re-exported webhook message helper types.
 pub use webhook::{ActionCardButton, FeedCardLink};

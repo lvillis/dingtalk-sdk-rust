@@ -1,5 +1,4 @@
 use serde::de::DeserializeOwned;
-use serde_json::Value;
 
 use super::is_private_conversation;
 
@@ -10,12 +9,15 @@ use crate::{
     transport::{AccessTokenCache, DEFAULT_MSG_KEY, api_error},
     types::{
         ApprovalCreateProcessInstanceRequest, ApprovalListProcessInstanceIdsRequest,
-        ApprovalListProcessInstanceIdsResult, ApprovalTerminateProcessInstanceRequest,
-        ContactCreateDepartmentRequest, ContactCreateUserRequest, ContactDeleteDepartmentRequest,
-        ContactDeleteUserRequest, ContactGetDepartmentRequest, ContactGetUserByMobileRequest,
-        ContactGetUserByUnionIdRequest, ContactGetUserRequest, ContactListSubDepartmentIdsRequest,
-        ContactListSubDepartmentsRequest, ContactListUsersRequest, ContactUpdateDepartmentRequest,
-        ContactUpdateUserRequest,
+        ApprovalListProcessInstanceIdsResult, ApprovalProcessInstance,
+        ApprovalTerminateProcessInstanceRequest, ContactCreateDepartmentRequest,
+        ContactCreateDepartmentResult, ContactCreateUserRequest, ContactCreateUserResult,
+        ContactDeleteDepartmentRequest, ContactDeleteUserRequest, ContactDepartment,
+        ContactGetDepartmentRequest, ContactGetUserByMobileRequest, ContactGetUserByUnionIdRequest,
+        ContactGetUserRequest, ContactListSubDepartmentIdsRequest,
+        ContactListSubDepartmentIdsResult, ContactListSubDepartmentsRequest,
+        ContactListSubDepartmentsResult, ContactListUsersRequest, ContactListUsersResult,
+        ContactUpdateDepartmentRequest, ContactUpdateUserRequest, ContactUser,
         internal::{
             ApprovalCreateProcessInstanceResponse, ApprovalGetProcessInstanceResponse,
             GetTokenResponse, GroupMessageRequest, MsgParam, OtoMessageRequest,
@@ -72,12 +74,12 @@ impl BlockingEnterpriseService {
             .send_json::<GetTokenResponse>()?;
 
         if response.errcode != 0 {
-            return Err(api_error(response.errcode, response.errmsg, None));
+            return Err(api_error(response.errcode, response.errmsg, None, None));
         }
 
         let access_token = response
             .access_token
-            .ok_or_else(|| api_error(-1, "No access token returned", None))?;
+            .ok_or_else(|| api_error(-1, "No access token returned", None, None))?;
 
         if let Some(cache) = &self.access_token_cache {
             cache.store(access_token.clone(), response.expires_in);
@@ -106,19 +108,13 @@ impl BlockingEnterpriseService {
                 response.errcode,
                 response.errmsg,
                 response.request_id,
+                None,
             ));
         }
 
         response
             .result
-            .ok_or_else(|| api_error(-1, "Missing result field in topapi response", None))
-    }
-
-    fn post_topapi_value<B>(&self, segments: &[&str], body: &B) -> Result<Value>
-    where
-        B: serde::Serialize + ?Sized,
-    {
-        self.post_topapi_result(segments, body)
+            .ok_or_else(|| api_error(-1, "Missing result field in topapi response", None, None))
     }
 
     fn post_topapi_unit<B>(&self, segments: &[&str], body: &B) -> Result<()>
@@ -140,6 +136,7 @@ impl BlockingEnterpriseService {
                 response.errcode,
                 response.errmsg,
                 response.request_id,
+                None,
             ));
         }
 
@@ -203,34 +200,40 @@ impl BlockingEnterpriseService {
     }
 
     /// Gets user details by user id.
-    pub fn contact_get_user(&self, request: ContactGetUserRequest) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "user", "get"], &request)
+    pub fn contact_get_user(&self, request: ContactGetUserRequest) -> Result<ContactUser> {
+        self.post_topapi_result(&["topapi", "v2", "user", "get"], &request)
     }
 
     /// Gets user details by mobile.
     pub fn contact_get_user_by_mobile(
         &self,
         request: ContactGetUserByMobileRequest,
-    ) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "user", "getbymobile"], &request)
+    ) -> Result<ContactUser> {
+        self.post_topapi_result(&["topapi", "v2", "user", "getbymobile"], &request)
     }
 
     /// Gets user details by union id.
     pub fn contact_get_user_by_unionid(
         &self,
         request: ContactGetUserByUnionIdRequest,
-    ) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "user", "getbyunionid"], &request)
+    ) -> Result<ContactUser> {
+        self.post_topapi_result(&["topapi", "user", "getbyunionid"], &request)
     }
 
     /// Lists users in a department.
-    pub fn contact_list_users(&self, request: ContactListUsersRequest) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "user", "list"], &request)
+    pub fn contact_list_users(
+        &self,
+        request: ContactListUsersRequest,
+    ) -> Result<ContactListUsersResult> {
+        self.post_topapi_result(&["topapi", "v2", "user", "list"], &request)
     }
 
     /// Creates a user.
-    pub fn contact_create_user(&self, request: ContactCreateUserRequest) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "user", "create"], &request)
+    pub fn contact_create_user(
+        &self,
+        request: ContactCreateUserRequest,
+    ) -> Result<ContactCreateUserResult> {
+        self.post_topapi_result(&["topapi", "v2", "user", "create"], &request)
     }
 
     /// Updates a user.
@@ -244,32 +247,35 @@ impl BlockingEnterpriseService {
     }
 
     /// Gets department details.
-    pub fn contact_get_department(&self, request: ContactGetDepartmentRequest) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "department", "get"], &request)
+    pub fn contact_get_department(
+        &self,
+        request: ContactGetDepartmentRequest,
+    ) -> Result<ContactDepartment> {
+        self.post_topapi_result(&["topapi", "v2", "department", "get"], &request)
     }
 
     /// Lists child departments.
     pub fn contact_list_sub_departments(
         &self,
         request: ContactListSubDepartmentsRequest,
-    ) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "department", "listsub"], &request)
+    ) -> Result<ContactListSubDepartmentsResult> {
+        self.post_topapi_result(&["topapi", "v2", "department", "listsub"], &request)
     }
 
     /// Lists child department ids.
     pub fn contact_list_sub_department_ids(
         &self,
         request: ContactListSubDepartmentIdsRequest,
-    ) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "department", "listsubid"], &request)
+    ) -> Result<ContactListSubDepartmentIdsResult> {
+        self.post_topapi_result(&["topapi", "v2", "department", "listsubid"], &request)
     }
 
     /// Creates a department.
     pub fn contact_create_department(
         &self,
         request: ContactCreateDepartmentRequest,
-    ) -> Result<Value> {
-        self.post_topapi_value(&["topapi", "v2", "department", "create"], &request)
+    ) -> Result<ContactCreateDepartmentResult> {
+        self.post_topapi_result(&["topapi", "v2", "department", "create"], &request)
     }
 
     /// Updates a department.
@@ -304,16 +310,20 @@ impl BlockingEnterpriseService {
                 response.errcode,
                 response.errmsg,
                 response.request_id,
+                None,
             ));
         }
 
         response
             .process_instance_id
-            .ok_or_else(|| api_error(-1, "Missing process_instance_id in response", None))
+            .ok_or_else(|| api_error(-1, "Missing process_instance_id in response", None, None))
     }
 
     /// Gets approval process instance details.
-    pub fn approval_get_process_instance(&self, process_instance_id: &str) -> Result<Value> {
+    pub fn approval_get_process_instance(
+        &self,
+        process_instance_id: &str,
+    ) -> Result<ApprovalProcessInstance> {
         let access_token = self.get_access_token()?;
         let endpoint = self
             .client
@@ -334,12 +344,13 @@ impl BlockingEnterpriseService {
                 response.errcode,
                 response.errmsg,
                 response.request_id,
+                None,
             ));
         }
 
         response
             .process_instance
-            .ok_or_else(|| api_error(-1, "Missing process_instance field in response", None))
+            .ok_or_else(|| api_error(-1, "Missing process_instance field in response", None, None))
     }
 
     /// Lists approval process instance ids.
