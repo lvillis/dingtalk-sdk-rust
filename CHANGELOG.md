@@ -3,6 +3,10 @@
 ### 🚀 Features
 
 - *(api)* [**breaking**] Type enterprise responses and adopt sdk-native retry/errors
+
+### ⚙️ Miscellaneous Tasks
+
+- Release dingtalk-sdk version 1.0.7
 ## [1.0.6] - 2026-02-12
 
 ### 🐛 Bug Fixes
