@@ -1,3 +1,13 @@
+## [1.0.9] - 2026-03-10
+
+### 🚜 Refactor
+
+- [**breaking**] Modernize client transport and error model
+## [1.0.8] - 2026-03-05
+
+### ⚙️ Miscellaneous Tasks
+
+- Release dingtalk-sdk version 1.0.8
 ## [1.0.7] - 2026-02-14
 
 ### 🚀 Features
