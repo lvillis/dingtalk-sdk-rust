@@ -3,7 +3,7 @@ use std::fmt;
 /// Enterprise app credentials (`appkey` + `appsecret`).
 ///
 /// `Debug` output redacts `appsecret`.
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct AppCredentials {
     appkey: String,
     appsecret: String,

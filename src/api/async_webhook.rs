@@ -1,7 +1,7 @@
 use crate::{
     client::async_client::Client,
     error::Result,
-    transport::{build_webhook_url, validate_standard_api_response},
+    transport::{build_webhook_url, parse_standard_api_text_response},
     types::{
         ActionCardButton, FeedCardLink,
         internal::{
@@ -39,11 +39,9 @@ impl WebhookService {
             .webhook_http()
             .post(url.as_str())
             .json(message)?
-            .send()
+            .send_response()
             .await?;
-        let body = response.text_lossy();
-        validate_standard_api_response(&body, self.client.body_snippet())?;
-        Ok(body)
+        parse_standard_api_text_response(response, self.client.body_snippet())
     }
 
     /// Sends a text webhook message.

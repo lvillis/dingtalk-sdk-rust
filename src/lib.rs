@@ -7,7 +7,7 @@
 //! - async client (`Client`) and services (`WebhookService`, `EnterpriseService`)
 //! - optional blocking client (`BlockingClient`) and services
 //! - typed request/response models for contacts and approvals
-//! - unified error model and retry integration via `reqx`
+//! - unified error model and transport profiles/retry integration via `reqx`
 //!
 //! # Quick Start (Async)
 //!
@@ -124,7 +124,6 @@ mod api;
 mod auth;
 mod client;
 mod error;
-mod retry;
 mod signature;
 mod transport;
 mod types;
@@ -156,8 +155,10 @@ pub mod blocking {
 pub use auth::AppCredentials;
 /// SDK error type and helpers.
 pub use error::{Error, ErrorKind, HttpError, Result, TransportError};
-/// SDK retry policy configuration.
-pub use retry::RetryConfig;
+/// reqx transport profile presets for DingTalk clients.
+pub use reqx::advanced::ClientProfile;
+/// reqx retry policy for DingTalk clients.
+pub use reqx::prelude::RetryPolicy;
 /// Controls whether and how response snippets are retained in errors.
 pub use transport::BodySnippetConfig;
 /// Public webhook and enterprise request/response helper types.

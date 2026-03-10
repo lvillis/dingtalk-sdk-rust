@@ -36,9 +36,7 @@ fn blocking_contact_get_user_returns_typed_payload() {
 
     let client = BlockingClient::builder()
         .webhook_base_url(server.base_url())
-        .expect("mock webhook url should be valid")
         .enterprise_base_url(server.base_url())
-        .expect("mock enterprise url should be valid")
         .build()
         .expect("client should build");
     let enterprise = client.enterprise("app-key", "app-secret", "robot-code");
@@ -71,9 +69,7 @@ fn blocking_webhook_error_keeps_snippet_out_of_display() {
 
     let client = BlockingClient::builder()
         .webhook_base_url(server.base_url())
-        .expect("mock webhook url should be valid")
         .enterprise_base_url(server.base_url())
-        .expect("mock enterprise url should be valid")
         .build()
         .expect("client should build");
     let webhook = client.webhook("token-123", None);

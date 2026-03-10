@@ -41,7 +41,8 @@ This project is a DingTalk API SDK written in Rust, with async/blocking clients,
   - Blocking: `BlockingClientBuilder -> BlockingClient -> webhook()/enterprise()`
 - **Builder best-practice options**:
   - base URL override (`webhook_base_url`, `enterprise_base_url`)
-  - transport retry (`with_retry` / `retry_policy`, optional non-idempotent retry)
+  - transport profile presets via `ClientProfile`
+  - transport retry override via `RetryPolicy` (optional non-idempotent retry)
   - default headers (`default_header`)
   - enterprise access token cache (`cache_access_token`, `token_refresh_margin`)
 - **Service types**:
@@ -149,16 +150,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-Custom endpoint and retry policy:
+Custom profile, endpoint and retry policy:
 
 ```rust
 use std::time::Duration;
-use dingtalk_sdk::{Client, RetryConfig};
+use dingtalk_sdk::{Client, ClientProfile, RetryPolicy};
 
 let client = Client::builder()
-    .webhook_base_url("https://oapi.dingtalk.com")?
-    .enterprise_base_url("https://api.dingtalk.com")?
-    .retry(RetryConfig::standard().max_retries(3))
+    .profile(ClientProfile::LowLatency)
+    .webhook_base_url("https://oapi.dingtalk.com")
+    .enterprise_base_url("https://api.dingtalk.com")
+    .retry_policy(
+        RetryPolicy::standard()
+            .max_attempts(4)
+            .base_backoff(Duration::from_millis(100)),
+    )
     .retry_non_idempotent(false)
     .token_refresh_margin(Duration::from_secs(180))
     .build()?;

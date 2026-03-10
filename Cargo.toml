@@ -2,7 +2,7 @@
 name = "dingtalk-sdk"
 description = "Dingtalk SDK for Rust."
 version = "1.0.8"
-rust-version = "1.93.0"
+rust-version = "1.94.0"
 edition = "2024"
 license = "MIT"
 authors = ["lvillis<lvillis@outlook.com>"]
@@ -36,19 +36,20 @@ blocking-tls-rustls-aws-lc-rs = ["_blocking", "reqx/blocking-tls-rustls-aws-lc-r
 blocking-tls-native = ["_blocking", "reqx/blocking-tls-native"]
 
 [dependencies]
-reqx = { version = "0.1.23", default-features = false }
+reqx = { version = "0.1.27", default-features = false, features = ["strict-feature-guards"] }
 urlencoding = { version = "2.1.3", default-features = false }
-url = { version = "2.5.7", default-features = false }
-serde = { version = "1.0.218", features = ["derive"] }
-serde_json = "1.0.139"
-thiserror = { version = "2.0.11" }
-base64 = { version = "0.22.1" }
-hmac = { version = "0.12.1" }
-sha2 = { version = "0.10.8" }
+url = { version = "2.5.8", default-features = false, features = ["std"] }
+serde = { version = "1.0.228", default-features = false, features = ["derive", "std"] }
+serde_json = { version = "1.0.149", default-features = false, features = ["std"] }
+thiserror = { version = "2.0.18", default-features = false, features = ["std"] }
+base64 = { version = "0.22.1", default-features = false, features = ["alloc"] }
+hmac = { version = "0.12.1", default-features = false }
+sha2 = { version = "0.10.9", default-features = false }
+httpdate = { version = "1.0.3", default-features = false }
 
 [dev-dependencies]
 tokio = { version = "1.50.0", default-features = false, features = ["macros", "rt-multi-thread"] }
-httpmock = { version = "0.8.3" }
+httpmock = { version = "0.8.3", default-features = false }
 
 [[example]]
 name = "async_webhook"

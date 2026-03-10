@@ -6,7 +6,11 @@ use crate::{
     auth::AppCredentials,
     client::blocking_client::BlockingClient,
     error::{Error, Result},
-    transport::{AccessTokenCache, DEFAULT_MSG_KEY, api_error},
+    transport::{
+        DEFAULT_MSG_KEY, parse_approval_create_response, parse_approval_get_response,
+        parse_get_token_response, parse_standard_api_text_response, parse_topapi_result_response,
+        parse_topapi_unit_response,
+    },
     types::{
         ApprovalCreateProcessInstanceRequest, ApprovalListProcessInstanceIdsRequest,
         ApprovalListProcessInstanceIdsResult, ApprovalProcessInstance,
@@ -18,11 +22,7 @@ use crate::{
         ContactListSubDepartmentIdsResult, ContactListSubDepartmentsRequest,
         ContactListSubDepartmentsResult, ContactListUsersRequest, ContactListUsersResult,
         ContactUpdateDepartmentRequest, ContactUpdateUserRequest, ContactUser,
-        internal::{
-            ApprovalCreateProcessInstanceResponse, ApprovalGetProcessInstanceResponse,
-            GetTokenResponse, GroupMessageRequest, MsgParam, OtoMessageRequest,
-            TopApiResultResponse, TopApiSimpleResponse,
-        },
+        internal::{GroupMessageRequest, MsgParam, OtoMessageRequest},
     },
 };
 
@@ -32,7 +32,6 @@ pub struct BlockingEnterpriseService {
     client: BlockingClient,
     credentials: AppCredentials,
     robot_code: String,
-    access_token_cache: Option<AccessTokenCache>,
 }
 
 impl BlockingEnterpriseService {
@@ -42,48 +41,33 @@ impl BlockingEnterpriseService {
         appsecret: impl Into<String>,
         robot_code: impl Into<String>,
     ) -> Self {
-        let access_token_cache = client
-            .cache_access_token_enabled()
-            .then(|| AccessTokenCache::new(client.token_refresh_margin()));
-
         Self {
             client,
             credentials: AppCredentials::new(appkey, appsecret),
             robot_code: robot_code.into(),
-            access_token_cache,
         }
     }
 
     /// Retrieves enterprise access token and refreshes cache when needed.
     pub fn get_access_token(&self) -> Result<String> {
-        if let Some(token) = self
-            .access_token_cache
-            .as_ref()
-            .and_then(AccessTokenCache::get)
-        {
+        if let Some(token) = self.client.cached_access_token(&self.credentials) {
             return Ok(token);
         }
 
         let endpoint = self.client.webhook_endpoint(&["gettoken"])?;
-        let response = self
-            .client
-            .webhook_http()
-            .get(endpoint.as_str())
-            .query_pair("appkey", self.credentials.appkey().to_string())
-            .query_pair("appsecret", self.credentials.appsecret().to_string())
-            .send_json::<GetTokenResponse>()?;
+        let payload = parse_get_token_response(
+            self.client
+                .webhook_http()
+                .get(endpoint.as_str())
+                .query_pair("appkey", self.credentials.appkey().to_string())
+                .query_pair("appsecret", self.credentials.appsecret().to_string())
+                .send_response()?,
+            self.client.body_snippet(),
+        )?;
+        let access_token = payload.token;
 
-        if response.errcode != 0 {
-            return Err(api_error(response.errcode, response.errmsg, None, None));
-        }
-
-        let access_token = response
-            .access_token
-            .ok_or_else(|| api_error(-1, "No access token returned", None, None))?;
-
-        if let Some(cache) = &self.access_token_cache {
-            cache.store(access_token.clone(), response.expires_in);
-        }
+        self.client
+            .store_access_token(&self.credentials, access_token.clone(), payload.expires_in);
 
         Ok(access_token)
     }
@@ -95,26 +79,15 @@ impl BlockingEnterpriseService {
     {
         let access_token = self.get_access_token()?;
         let endpoint = self.client.webhook_endpoint(segments)?;
-        let response = self
-            .client
-            .webhook_http()
-            .post(endpoint.as_str())
-            .query_pair("access_token", access_token)
-            .json(body)?
-            .send_json::<TopApiResultResponse<T>>()?;
-
-        if response.errcode != 0 {
-            return Err(api_error(
-                response.errcode,
-                response.errmsg,
-                response.request_id,
-                None,
-            ));
-        }
-
-        response
-            .result
-            .ok_or_else(|| api_error(-1, "Missing result field in topapi response", None, None))
+        parse_topapi_result_response(
+            self.client
+                .webhook_http()
+                .post(endpoint.as_str())
+                .query_pair("access_token", access_token)
+                .json(body)?
+                .send_response()?,
+            self.client.body_snippet(),
+        )
     }
 
     fn post_topapi_unit<B>(&self, segments: &[&str], body: &B) -> Result<()>
@@ -123,24 +96,15 @@ impl BlockingEnterpriseService {
     {
         let access_token = self.get_access_token()?;
         let endpoint = self.client.webhook_endpoint(segments)?;
-        let response = self
-            .client
-            .webhook_http()
-            .post(endpoint.as_str())
-            .query_pair("access_token", access_token)
-            .json(body)?
-            .send_json::<TopApiSimpleResponse>()?;
-
-        if response.errcode != 0 {
-            return Err(api_error(
-                response.errcode,
-                response.errmsg,
-                response.request_id,
-                None,
-            ));
-        }
-
-        Ok(())
+        parse_topapi_unit_response(
+            self.client
+                .webhook_http()
+                .post(endpoint.as_str())
+                .query_pair("access_token", access_token)
+                .json(body)?
+                .send_response()?,
+            self.client.body_snippet(),
+        )
     }
 
     fn send_enterprise_message<T: serde::Serialize + ?Sized>(
@@ -151,17 +115,15 @@ impl BlockingEnterpriseService {
         let access_token = self.get_access_token()?;
         let endpoint = self.client.enterprise_endpoint(segments)?;
 
-        let response = self
-            .client
-            .enterprise_http()
-            .post(endpoint.as_str())
-            .try_header("x-acs-dingtalk-access-token", &access_token)?
-            .json(payload)?
-            .send()?;
-
-        let body = response.text_lossy();
-        crate::transport::validate_standard_api_response(&body, self.client.body_snippet())?;
-        Ok(body)
+        parse_standard_api_text_response(
+            self.client
+                .enterprise_http()
+                .post(endpoint.as_str())
+                .try_header("x-acs-dingtalk-access-token", &access_token)?
+                .json(payload)?
+                .send_response()?,
+            self.client.body_snippet(),
+        )
     }
 
     /// Sends a group message to a conversation.
@@ -297,26 +259,15 @@ impl BlockingEnterpriseService {
         let endpoint = self
             .client
             .webhook_endpoint(&["topapi", "processinstance", "create"])?;
-        let response = self
-            .client
-            .webhook_http()
-            .post(endpoint.as_str())
-            .query_pair("access_token", access_token)
-            .json(&request)?
-            .send_json::<ApprovalCreateProcessInstanceResponse>()?;
-
-        if response.errcode != 0 {
-            return Err(api_error(
-                response.errcode,
-                response.errmsg,
-                response.request_id,
-                None,
-            ));
-        }
-
-        response
-            .process_instance_id
-            .ok_or_else(|| api_error(-1, "Missing process_instance_id in response", None, None))
+        parse_approval_create_response(
+            self.client
+                .webhook_http()
+                .post(endpoint.as_str())
+                .query_pair("access_token", access_token)
+                .json(&request)?
+                .send_response()?,
+            self.client.body_snippet(),
+        )
     }
 
     /// Gets approval process instance details.
@@ -331,26 +282,15 @@ impl BlockingEnterpriseService {
         let request = serde_json::json!({
             "process_instance_id": process_instance_id
         });
-        let response = self
-            .client
-            .webhook_http()
-            .post(endpoint.as_str())
-            .query_pair("access_token", access_token)
-            .json(&request)?
-            .send_json::<ApprovalGetProcessInstanceResponse>()?;
-
-        if response.errcode != 0 {
-            return Err(api_error(
-                response.errcode,
-                response.errmsg,
-                response.request_id,
-                None,
-            ));
-        }
-
-        response
-            .process_instance
-            .ok_or_else(|| api_error(-1, "Missing process_instance field in response", None, None))
+        parse_approval_get_response(
+            self.client
+                .webhook_http()
+                .post(endpoint.as_str())
+                .query_pair("access_token", access_token)
+                .json(&request)?
+                .send_response()?,
+            self.client.body_snippet(),
+        )
     }
 
     /// Lists approval process instance ids.

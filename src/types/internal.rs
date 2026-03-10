@@ -144,45 +144,61 @@ pub(crate) struct OtoMessageRequest<'a> {
 #[derive(Debug, Deserialize)]
 pub(crate) struct GetTokenResponse {
     pub(crate) errcode: i64,
+    #[serde(alias = "message")]
     pub(crate) errmsg: String,
+    #[serde(alias = "accessToken")]
     pub(crate) access_token: Option<String>,
+    #[serde(alias = "expiresIn", alias = "expireIn")]
     pub(crate) expires_in: Option<i64>,
+    #[serde(default, alias = "requestId", alias = "RequestId")]
+    pub(crate) request_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct StandardApiResponse {
     pub(crate) errcode: Option<i64>,
+    #[serde(alias = "message")]
     pub(crate) errmsg: Option<String>,
+    #[serde(default, alias = "requestId", alias = "RequestId")]
+    pub(crate) request_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct TopApiResultResponse<T> {
     pub(crate) errcode: i64,
+    #[serde(alias = "message")]
     pub(crate) errmsg: String,
     pub(crate) result: Option<T>,
+    #[serde(default, alias = "requestId", alias = "RequestId")]
     pub(crate) request_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct TopApiSimpleResponse {
     pub(crate) errcode: i64,
+    #[serde(alias = "message")]
     pub(crate) errmsg: String,
+    #[serde(default, alias = "requestId", alias = "RequestId")]
     pub(crate) request_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ApprovalCreateProcessInstanceResponse {
     pub(crate) errcode: i64,
+    #[serde(alias = "message")]
     pub(crate) errmsg: String,
     pub(crate) process_instance_id: Option<String>,
+    #[serde(default, alias = "requestId", alias = "RequestId")]
     pub(crate) request_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ApprovalGetProcessInstanceResponse {
     pub(crate) errcode: i64,
+    #[serde(alias = "message")]
     pub(crate) errmsg: String,
     pub(crate) process_instance: Option<ApprovalProcessInstance>,
+    #[serde(default, alias = "requestId", alias = "RequestId")]
     pub(crate) request_id: Option<String>,
 }
 

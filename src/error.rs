@@ -47,6 +47,16 @@ pub struct TransportError {
     pub retry_after: Option<Duration>,
     /// Whether the error is likely retryable.
     pub retryable: bool,
+    /// Stable transport error code derived from reqx.
+    pub code: &'static str,
+    /// Optional HTTP method for the failed request.
+    pub method: Option<String>,
+    /// Optional redacted request URI/path for the failed request.
+    pub uri: Option<String>,
+    /// Optional timeout phase when the transport failed due to timeout.
+    pub timeout_phase: Option<&'static str>,
+    /// Optional lower-level transport kind when available.
+    pub transport_kind: Option<&'static str>,
 }
 
 impl fmt::Display for TransportError {
@@ -132,7 +142,7 @@ pub enum Error {
 
     /// Transport error from HTTP runtime/client.
     #[error("HTTP transport error: {0}")]
-    Transport(TransportError),
+    Transport(Box<TransportError>),
 
     /// JSON serialization/deserialization error.
     #[error("Serialization error: {0}")]
@@ -156,11 +166,39 @@ pub enum Error {
     },
 }
 
+fn reqx_timeout_phase_name(error: &reqx::Error) -> Option<&'static str> {
+    match error {
+        reqx::Error::Timeout { phase, .. } => Some(match phase {
+            reqx::TimeoutPhase::Transport => "transport",
+            reqx::TimeoutPhase::ResponseBody => "response_body",
+        }),
+        _ => None,
+    }
+}
+
+fn reqx_transport_kind_name(error: &reqx::Error) -> Option<&'static str> {
+    match error {
+        reqx::Error::Transport { kind, .. } => Some(match kind {
+            reqx::TransportErrorKind::Dns => "dns",
+            reqx::TransportErrorKind::Connect => "connect",
+            reqx::TransportErrorKind::Tls => "tls",
+            reqx::TransportErrorKind::Read => "read",
+            reqx::TransportErrorKind::Other => "other",
+        }),
+        _ => None,
+    }
+}
+
 impl From<reqx::Error> for Error {
     fn from(source: reqx::Error) -> Self {
+        let code = source.code().as_str();
         let status = source.status_code();
         let request_id = source.request_id().map(ToOwned::to_owned);
         let retry_after = source.retry_after(SystemTime::now());
+        let method = source.request_method().map(ToString::to_string);
+        let uri = source.request_uri_redacted_owned();
+        let timeout_phase = reqx_timeout_phase_name(&source);
+        let transport_kind = reqx_transport_kind_name(&source);
         let retryable = match source.code() {
             reqx::ErrorCode::Timeout
             | reqx::ErrorCode::DeadlineExceeded
@@ -184,25 +222,35 @@ impl From<reqx::Error> for Error {
                 404 => Self::NotFound(error),
                 409 | 412 => Self::Conflict(error),
                 429 => Self::RateLimited { retry_after, error },
-                _ => Self::Transport(TransportError {
+                _ => Self::Transport(Box::new(TransportError {
                     status: Some(status),
-                    message: Some(source.to_string()),
+                    message: None,
                     request_id,
                     body_snippet: None,
                     retry_after,
                     retryable,
-                }),
+                    code,
+                    method,
+                    uri,
+                    timeout_phase,
+                    transport_kind,
+                })),
             };
         }
 
-        Self::Transport(TransportError {
+        Self::Transport(Box::new(TransportError {
             status: None,
             message: Some(source.to_string()),
             request_id,
             body_snippet: None,
             retry_after,
             retryable,
-        })
+            code,
+            method,
+            uri,
+            timeout_phase,
+            transport_kind,
+        }))
     }
 }
 
